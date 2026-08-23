@@ -10,5 +10,7 @@ COPY src/detection/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY src/detection/ ./src/detection/
+# Seeding scripts for the scheduled demo-dataset refresh cycle
+COPY scripts/ ./scripts/
 
 CMD ["python", "-m", "src.detection.scheduler"]

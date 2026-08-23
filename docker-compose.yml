@@ -1,27 +1,24 @@
 services:
-  zookeeper:
-    image: confluentinc/cp-zookeeper:7.5.0
-    container_name: zookeeper
-    environment:
-      ZOOKEEPER_CLIENT_PORT: 2181
-      ZOOKEEPER_TICK_TIME: 2000
-    networks:
-      - anomaly-net
-
   kafka:
+    # Single-node KRaft mode — no Zookeeper required
     image: confluentinc/cp-kafka:7.5.0
     container_name: kafka
     ports:
       - "9092:9092"
-    depends_on:
-      - zookeeper
     environment:
-      KAFKA_BROKER_ID: 1
-      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      CLUSTER_ID: "MkU3OEVhNzNFRTBBNDA1Qg"
+      KAFKA_NODE_ID: 1
+      KAFKA_PROCESS_ROLES: broker,controller
+      KAFKA_CONTROLLER_QUORUM_VOTERS: 1@kafka:29093
+      KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:29092,CONTROLLER://0.0.0.0:29093,PLAINTEXT_HOST://0.0.0.0:9092
       KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
-      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: CONTROLLER:PLAINTEXT,PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_CONTROLLER_LISTENER_NAMES: CONTROLLER
       KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
       KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_REPLICATION_FACTOR: 1
+      KAFKA_TRANSACTION_STATE_LOG_MIN_ISR: 1
+      KAFKA_GROUP_INITIAL_REBALANCE_DELAY_MS: 0
       KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
       KAFKA_LOG_RETENTION_HOURS: 168
       KAFKA_LOG_RETENTION_BYTES: 1073741824
@@ -159,31 +156,10 @@ services:
       - .env
     environment:
       DATABASE_URL: "postgresql://postgres:password@postgres:5432/market_anomalies"
+      DEMO_DATABASE_URL: "postgresql://postgres:password@postgres:5432/market_anomalies_demo"
     depends_on:
       postgres:
         condition: service_healthy
-    networks:
-      - anomaly-net
-    restart: unless-stopped
-
-  demo-refresher:
-    build:
-      context: .
-      dockerfile: scripts/Dockerfile
-    container_name: demo-refresher
-    environment:
-      DATABASE_URL: "postgresql://postgres:password@postgres:5432/market_anomalies_demo"
-      DEMO_REFRESH_SECONDS: ${DEMO_REFRESH_SECONDS:-21600}
-    depends_on:
-      postgres:
-        condition: service_healthy
-    command: >
-      sh -c "python scripts/init_db.py &&
-             while true; do
-               DROP_EXISTING=1 python scripts/seed_demo_data.py &&
-               echo '[demo-refresher] next refresh in '\"$DEMO_REFRESH_SECONDS\"'s' &&
-               sleep \"$DEMO_REFRESH_SECONDS\";
-             done"
     networks:
       - anomaly-net
     restart: unless-stopped

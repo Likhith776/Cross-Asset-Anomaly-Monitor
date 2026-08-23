@@ -26,6 +26,7 @@ Usage:
 import logging
 import os
 import signal
+import subprocess
 import sys
 import time
 from datetime import datetime, timedelta, timezone
@@ -52,6 +53,12 @@ FEATURES_RETENTION_DAYS = 30
 CORRELATIONS_RETENTION_DAYS = 7
 DAILY_CLEANUP_HOUR_UTC = 0                 # 00:00 UTC, like the DAG
 DB_CONNECT_BACKOFF_SECONDS = 10
+
+# Demo dataset auto-refresh: wipe + regenerate with fresh timestamps so the
+# dashboard's DEMO mode always shows a current-looking 7-day window.
+# Empty DEMO_DATABASE_URL disables the cycle entirely.
+DEMO_DATABASE_URL = os.getenv("DEMO_DATABASE_URL", "").strip()
+DEMO_REFRESH_SECONDS = int(os.getenv("DEMO_REFRESH_SECONDS", str(6 * 60 * 60)))
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -333,6 +340,43 @@ def run_cleanup_cycle(conn: Any) -> None:
 
 
 # ---------------------------------------------------------------------------
+# Demo dataset refresh (replaces the old demo-refresher service)
+# ---------------------------------------------------------------------------
+
+def _run_script(script: str, env_overrides: dict) -> int:
+    """Run a project script as a subprocess with overridden env. Returns exit code."""
+    env = dict(os.environ, **env_overrides)
+    return subprocess.run(
+        [sys.executable, script], env=env, check=False
+    ).returncode
+
+
+def ensure_demo_schema() -> None:
+    """Create demo tables if missing (idempotent)."""
+    if not DEMO_DATABASE_URL:
+        return
+    code = _run_script("scripts/init_db.py", {"DATABASE_URL": DEMO_DATABASE_URL})
+    if code != 0:
+        logger.error("[DEMO] init_db for the demo dataset failed (exit %d)", code)
+
+
+def run_demo_refresh() -> bool:
+    """Wipe + regenerate the demo dataset with fresh timestamps."""
+    if not DEMO_DATABASE_URL:
+        return False
+    logger.info("[DEMO] Refreshing demo dataset (regenerates ~74k rows) ...")
+    code = _run_script(
+        "scripts/seed_demo_data.py",
+        {"DATABASE_URL": DEMO_DATABASE_URL, "DROP_EXISTING": "1"},
+    )
+    if code == 0:
+        logger.info("[DEMO] Demo dataset refreshed — next refresh in %ds", DEMO_REFRESH_SECONDS)
+        return True
+    logger.error("[DEMO] Demo refresh failed (exit %d) — retrying next cycle", code)
+    return False
+
+
+# ---------------------------------------------------------------------------
 # Main Loop
 # ---------------------------------------------------------------------------
 
@@ -366,16 +410,32 @@ def main() -> None:
     logger.info("  Detect:   every %d seconds", DETECTION_INTERVAL_SECONDS)
     logger.info("  Cleanup:  daily at %02d:00 UTC (features %dd, correlations %dd)",
                 DAILY_CLEANUP_HOUR_UTC, FEATURES_RETENTION_DAYS, CORRELATIONS_RETENTION_DAYS)
+    if DEMO_DATABASE_URL:
+        logger.info("  Demo:     refresh every %ds (%s)",
+                    DEMO_REFRESH_SECONDS, DEMO_DATABASE_URL.split("@")[-1])
+    else:
+        logger.info("  Demo:     disabled (DEMO_DATABASE_URL not set)")
     logger.info("=" * 64)
+
+    ensure_demo_schema()
 
     next_detection = datetime.now(timezone.utc)
     next_cleanup = next_cleanup_time(datetime.now(timezone.utc))
+    next_demo_refresh = datetime.now(timezone.utc)  # seed once at startup
 
     # Run one cycle immediately on startup so the system is warm
     conn = get_connection()
     try:
         while not shutdown.should_stop:
             now = datetime.now(timezone.utc)
+
+            if DEMO_DATABASE_URL and now >= next_demo_refresh:
+                try:
+                    run_demo_refresh()
+                except Exception:
+                    logger.error("[DEMO] Refresh cycle crashed", exc_info=True)
+                next_demo_refresh = datetime.now(timezone.utc) + timedelta(seconds=DEMO_REFRESH_SECONDS)
+                continue
 
             if now >= next_cleanup:
                 logger.info("[SCHED] Running daily cleanup cycle")

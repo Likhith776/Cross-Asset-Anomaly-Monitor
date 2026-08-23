@@ -83,13 +83,13 @@ and is never blended with live pipeline data. Toggle **LIVE / DEMO** in
 the dashboard header; demo mode shows a synthetic-data banner on every
 view. All API endpoints accept `?dataset=live|demo` (default `live`).
 
-The `demo-refresher` service keeps the demo dataset looking current
+The `scheduler` service keeps the demo dataset looking current
 automatically: it reseeds (wipe + regenerate with fresh timestamps)
-every `DEMO_REFRESH_SECONDS` (default 6 hours). One-time setup:
+every `DEMO_REFRESH_SECONDS` (default 6 hours), alongside its detection
+and cleanup cycles. One-time setup:
 
 ```bash
 docker exec postgres createdb -U postgres market_anomalies_demo   # first time only
-docker compose up -d demo-refresher
 ```
 
 Manual immediate refresh: `docker exec demo-refresher sh -c "DROP_EXISTING=1 python scripts/seed_demo_data.py"`
