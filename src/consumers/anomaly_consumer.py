@@ -22,8 +22,11 @@ import logging
 from datetime import datetime, timezone
 from typing import Any, Optional
 
+from sqlalchemy import text
+
 from src.api.database import AnomalyEvent, async_session_factory
 from src.consumers.base import BaseConsumer
+from src.detection.anomaly_engine import should_insert_event
 from src.detection.pipeline import DetectionPipeline
 
 logger = logging.getLogger("anomaly_consumer")
@@ -64,6 +67,26 @@ class AnomalyConsumer(BaseConsumer):
         super().__init__(**kwargs)
         self.pipeline = DetectionPipeline()
 
+    @staticmethod
+    async def _last_event(session: Any, symbol: str) -> tuple[Optional[datetime], Optional[float]]:
+        """Most recent anomaly_events row for a symbol inside the cooldown window."""
+        from src.detection.anomaly_engine import ANOMALY_COOLDOWN_MINUTES
+
+        result = await session.execute(
+            text("""
+                SELECT timestamp, anomaly_score FROM anomaly_events
+                WHERE symbol = :symbol
+                  AND timestamp >= NOW() - (:minutes * INTERVAL '1 minute')
+                ORDER BY timestamp DESC
+                LIMIT 1
+            """),
+            {"symbol": symbol, "minutes": ANOMALY_COOLDOWN_MINUTES},
+        )
+        row = result.first()
+        if row is None:
+            return None, None
+        return row[0], float(row[1])
+
     async def process_message(self, key: Optional[str], value: dict[str, Any]) -> None:
         """Process a market tick: run detection, store anomalies."""
         symbol = value.get("symbol", key or "UNKNOWN")
@@ -92,6 +115,24 @@ class AnomalyConsumer(BaseConsumer):
         async with async_session_factory() as session:
             try:
                 for anomaly in anomalies:
+                    score = round(float(anomaly["score"]), 3)
+
+                    # Suppress sustained anomalies: skip re-insertion for a
+                    # symbol with a recent event unless the score escalated
+                    # (same rule as the batch engine).
+                    last_ts, last_score = await self._last_event(session, symbol)
+                    insert, reason = should_insert_event(
+                        score, last_ts, last_score, timestamp
+                    )
+                    if not insert:
+                        logger.info(
+                            "[ANOMALY] %s score=%.3f suppressed: %s",
+                            symbol,
+                            score,
+                            reason,
+                        )
+                        continue
+
                     flags = {"z_flag": False, "ewma_flag": False, "pca_flag": False}
                     flag_key = FLAG_BY_TYPE.get(anomaly["type"])
                     if flag_key:
@@ -100,7 +141,7 @@ class AnomalyConsumer(BaseConsumer):
                     session.add(AnomalyEvent(
                         timestamp=timestamp,
                         symbol=symbol,
-                        anomaly_score=round(float(anomaly["score"]), 3),
+                        anomaly_score=score,
                         z_flag=flags["z_flag"],
                         ewma_flag=flags["ewma_flag"],
                         pca_flag=flags["pca_flag"],
@@ -109,7 +150,7 @@ class AnomalyConsumer(BaseConsumer):
                     logger.warning(
                         "[ANOMALY] %s score=%.3f type=%s severity=%s",
                         symbol,
-                        anomaly["score"],
+                        score,
                         anomaly["type"],
                         anomaly["severity"],
                     )

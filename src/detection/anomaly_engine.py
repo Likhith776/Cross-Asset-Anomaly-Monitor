@@ -17,7 +17,7 @@ Usage:
 import logging
 import os
 import sys
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from typing import Any, Optional
 
 import numpy as np
@@ -57,6 +57,13 @@ PCA_NORMALIZER = 5.0
 
 # Score threshold for event insertion
 SCORE_INSERT_THRESHOLD = 0.30
+
+# Sustained-anomaly suppression: once an event is recorded for a symbol,
+# re-insertion is suppressed for the cooldown window unless the score
+# escalates by at least ANOMALY_ESCALATION_DELTA. Without this, a single
+# sustained anomaly would insert a near-identical event every cycle.
+ANOMALY_COOLDOWN_MINUTES = 30
+ANOMALY_ESCALATION_DELTA = 0.10
 
 # ---------------------------------------------------------------------------
 # Logging
@@ -119,6 +126,81 @@ def fetch_features(
     # Reverse so index 0 = oldest, index -1 = most recent
     records.reverse()
     return records
+
+
+def should_insert_event(
+    new_score: float,
+    last_timestamp: Optional[datetime],
+    last_score: Optional[float],
+    now: datetime,
+    cooldown_minutes: int = ANOMALY_COOLDOWN_MINUTES,
+    escalation_delta: float = ANOMALY_ESCALATION_DELTA,
+) -> tuple[bool, str]:
+    """
+    Pure decision for sustained-anomaly suppression.
+
+    Returns (insert?, reason). An event is inserted when:
+      - there is no recent event for the symbol, or
+      - the cooldown window has elapsed, or
+      - the score escalated by at least escalation_delta.
+    """
+    if last_timestamp is None:
+        return True, "first event for symbol in cooldown window"
+
+    age = now - last_timestamp
+    if age >= timedelta(minutes=cooldown_minutes):
+        return True, f"cooldown elapsed ({age.total_seconds() / 60:.0f}m since last event)"
+
+    if last_score is not None and new_score >= float(last_score) + escalation_delta:
+        return True, f"score escalated ({float(last_score):.3f} -> {new_score:.3f})"
+
+    last_score_str = f"{float(last_score):.3f}" if last_score is not None else "n/a"
+    return False, (
+        f"sustained anomaly (score {new_score:.3f} vs last {last_score_str} "
+        f"{age.total_seconds() / 60:.0f}m ago)"
+    )
+
+
+def apply_cooldown(
+    cur: Any,
+    events: list[dict[str, Any]],
+    now: datetime,
+) -> list[dict[str, Any]]:
+    """
+    Filter candidate events against recently inserted events.
+
+    Queries the most recent event per symbol within the cooldown window
+    and drops candidates suppressed by should_insert_event.
+    """
+    symbols = [e["symbol"] for e in events]
+    cur.execute(
+        """
+        SELECT DISTINCT ON (symbol) symbol, timestamp, anomaly_score
+        FROM anomaly_events
+        WHERE symbol = ANY(%s)
+          AND timestamp >= NOW() - (%s * INTERVAL '1 minute')
+        ORDER BY symbol, timestamp DESC
+        """,
+        (symbols, ANOMALY_COOLDOWN_MINUTES),
+    )
+    last_by_symbol = {row[0]: (row[1], row[2]) for row in cur.fetchall()}
+
+    kept: list[dict[str, Any]] = []
+    for e in events:
+        last_ts, last_score = last_by_symbol.get(e["symbol"], (None, None))
+        insert, reason = should_insert_event(
+            e["anomaly_score"], last_ts, last_score, now
+        )
+        if insert:
+            kept.append(e)
+        else:
+            logger.info(
+                "[DETECT] %s score=%.3f above threshold but suppressed: %s",
+                e["symbol"],
+                e["anomaly_score"],
+                reason,
+            )
+    return kept
 
 
 def insert_anomaly_events(
@@ -546,6 +628,10 @@ def run_detection(db_conn: Any) -> list[dict[str, Any]]:
                     "pca_flag": result["pca_flag"],
                     "description": result["description"],
                 })
+
+        # --- Suppress sustained anomalies (cooldown / escalation) ---
+        if events_to_insert:
+            events_to_insert = apply_cooldown(cur, events_to_insert, run_timestamp)
 
         # --- Insert qualifying events ---
         if events_to_insert:
