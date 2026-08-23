@@ -10,4 +10,5 @@ sqlalchemy[asyncio]
 asyncpg
 pydantic
 requests
+aiokafka
 pytest
