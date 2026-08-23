@@ -437,13 +437,21 @@ if assets:
             return "color: #f87171"
         return ""
 
+    def _fmt_or_dash(spec: str):
+        """None-safe numeric formatter — warm-up windows yield nulls."""
+        def _fmt(v):
+            if v is None or pd.isna(v):
+                return "—"
+            return format(v, spec)
+        return _fmt
+
     styled = df.style.map(_color_risk, subset=["Risk Level"])
     styled = styled.map(_color_zscore, subset=["Z-Score"])
     styled = styled.map(_color_freshness, subset=["Freshness"])
     styled = styled.format({
-        "Price": "{:,.4f}",
-        "EWMA Vol": "{:.8f}",
-        "Z-Score": "{:.4f}",
+        "Price": _fmt_or_dash(",.4f"),
+        "EWMA Vol": _fmt_or_dash(".8f"),
+        "Z-Score": _fmt_or_dash(".4f"),
     })
     styled = styled.hide(axis="index")
     st.dataframe(styled, use_container_width=True, height=340)
