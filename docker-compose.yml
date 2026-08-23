@@ -166,6 +166,28 @@ services:
       - anomaly-net
     restart: unless-stopped
 
+  demo-refresher:
+    build:
+      context: .
+      dockerfile: scripts/Dockerfile
+    container_name: demo-refresher
+    environment:
+      DATABASE_URL: "postgresql://postgres:password@postgres:5432/market_anomalies_demo"
+      DEMO_REFRESH_SECONDS: ${DEMO_REFRESH_SECONDS:-21600}
+    depends_on:
+      postgres:
+        condition: service_healthy
+    command: >
+      sh -c "python scripts/init_db.py &&
+             while true; do
+               DROP_EXISTING=1 python scripts/seed_demo_data.py &&
+               echo '[demo-refresher] next refresh in '\"$DEMO_REFRESH_SECONDS\"'s' &&
+               sleep \"$DEMO_REFRESH_SECONDS\";
+             done"
+    networks:
+      - anomaly-net
+    restart: unless-stopped
+
 networks:
   anomaly-net:
     driver: bridge

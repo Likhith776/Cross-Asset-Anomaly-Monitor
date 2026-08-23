@@ -462,53 +462,67 @@ if corr_data and corr_data.get("labels"):
     labels = corr_data["labels"]
     matrix = np.array(corr_data["matrix"])
 
-    short_labels = {
-        "^GSPC": "S&P 500",
-        "^IXIC": "Nasdaq",
-        "BTC-USD": "BTC",
-        "GC=F": "Gold",
-        "CL=F": "Oil",
-        "EURUSD=X": "EUR/USD",
-        "^TNX": "10Y Yield",
-    }
-    display_labels = [short_labels.get(l, l) for l in labels]
+    # No snapshots yet -> API returns an identity-only matrix (0.0
+    # off-diagonal). Rendering that as a heatmap would look like measured
+    # zero correlation — show an explicit pending state instead.
+    n = len(labels)
+    off_diagonal = matrix[~np.eye(n, dtype=bool)]
+    if n < 2 or not np.any(off_diagonal != 0.0):
+        st.info(
+            "⏳ Correlation snapshots pending — they require ~50 aligned "
+            "observations across all 7 assets. Crypto-only periods (nights/"
+            "weekends, when equities and futures are closed) don't provide "
+            "enough cross-asset data. The heatmap fills in once markets open "
+            "and all assets are actively trading."
+        )
+    else:
+        short_labels = {
+            "^GSPC": "S&P 500",
+            "^IXIC": "Nasdaq",
+            "BTC-USD": "BTC",
+            "GC=F": "Gold",
+            "CL=F": "Oil",
+            "EURUSD=X": "EUR/USD",
+            "^TNX": "10Y Yield",
+        }
+        display_labels = [short_labels.get(l, l) for l in labels]
 
-    fig = px.imshow(
-        matrix,
-        x=display_labels,
-        y=display_labels,
-        color_continuous_scale="RdBu_r",
-        zmin=-1,
-        zmax=1,
-        aspect="auto",
-        text_auto=".2f",
-    )
-    fig.update_traces(
-        textfont=dict(size=11, color="white"),
-        hovertemplate="%{x} ↔ %{y}<br>Correlation: %{z:.4f}<extra></extra>",
-    )
-    fig.update_layout(
-        title=dict(
-            text="Latest Correlation Snapshot",
-            font=dict(size=14, color="rgba(255,255,255,0.8)"),
-            x=0.0,
-            xanchor="left",
-            pad=dict(b=10),
-        ),
-        margin=dict(l=80, r=30, t=40, b=10),
-        height=420,
-        paper_bgcolor="rgba(0,0,0,0)",
-        plot_bgcolor="rgba(0,0,0,0)",
-        xaxis=dict(tickfont=dict(size=11)),
-        yaxis=dict(tickfont=dict(size=11)),
-        coloraxis_colorbar=dict(
-            title=dict(text="Correlation", font=dict(size=11)),
-            tickfont=dict(size=10),
-            thickness=15,
-            len=0.85,
-        ),
-    )
-    st.plotly_chart(fig, use_container_width=True)
+        fig = px.imshow(
+            matrix,
+            x=display_labels,
+            y=display_labels,
+            color_continuous_scale="RdBu_r",
+            zmin=-1,
+            zmax=1,
+            aspect="auto",
+            text_auto=".2f",
+        )
+        fig.update_traces(
+            textfont=dict(size=11, color="white"),
+            hovertemplate="%{x} ↔ %{y}<br>Correlation: %{z:.4f}<extra></extra>",
+        )
+        fig.update_layout(
+            title=dict(
+                text="Latest Correlation Snapshot",
+                font=dict(size=14, color="rgba(255,255,255,0.8)"),
+                x=0.0,
+                xanchor="left",
+                pad=dict(b=10),
+            ),
+            margin=dict(l=80, r=30, t=40, b=10),
+            height=420,
+            paper_bgcolor="rgba(0,0,0,0)",
+            plot_bgcolor="rgba(0,0,0,0)",
+            xaxis=dict(tickfont=dict(size=11)),
+            yaxis=dict(tickfont=dict(size=11)),
+            coloraxis_colorbar=dict(
+                title=dict(text="Correlation", font=dict(size=11)),
+                tickfont=dict(size=10),
+                thickness=15,
+                len=0.85,
+            ),
+        )
+        st.plotly_chart(fig, use_container_width=True)
 else:
     st.info("No correlation data available.")
 
