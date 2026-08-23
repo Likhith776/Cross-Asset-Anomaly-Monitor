@@ -1,0 +1,148 @@
+"""
+Anomaly detection consumer.
+
+Consumes market data ticks from Kafka (same payload as the market data
+producer: symbol, price, return_1m, return_5m, volume, fetch_id), runs
+them through the tick-level detection pipeline (z-score, isolation
+forest, cross-asset correlation), and persists qualifying anomalies to
+the anomaly_events table.
+
+This complements the batch anomaly engine (src/detection/anomaly_engine.py),
+which scores pre-computed features from market_features on a schedule.
+Raw tick storage is owned by the feature consumer, so this consumer only
+writes anomaly events.
+
+Usage:
+    python -m src.consumers.anomaly_consumer
+    KAFKA_BOOTSTRAP_SERVERS=localhost:9092 python -m src.consumers.anomaly_consumer
+"""
+
+import asyncio
+import logging
+from datetime import datetime, timezone
+from typing import Any, Optional
+
+from src.api.database import AnomalyEvent, async_session_factory
+from src.consumers.base import BaseConsumer
+from src.detection.pipeline import DetectionPipeline
+
+logger = logging.getLogger("anomaly_consumer")
+
+# Map tick-level detector types to the flag columns of anomaly_events.
+# The EWMA flag is owned by the batch engine; no tick-level detector
+# maps to it, so it stays False here.
+FLAG_BY_TYPE = {
+    "zscore_spike": "z_flag",
+    "correlation_break": "pca_flag",
+    "isolation_forest_outlier": None,
+}
+
+
+def build_description(symbol: str, anomaly: dict[str, Any]) -> str:
+    """Compose a human-readable description from a pipeline anomaly dict."""
+    metadata = anomaly.get("metadata", {})
+    detector = metadata.get("detector", "unknown")
+    parts = [f"Tick-level {anomaly['type']} ({detector} detector)"]
+
+    if "z_score" in metadata:
+        parts.append(f"z={metadata['z_score']:.2f}")
+    if metadata.get("pair"):
+        parts.append(
+            f"pair={metadata['pair']} corr={metadata.get('current_correlation')}"
+        )
+    if "raw_score" in metadata:
+        parts.append(f"iforest_score={metadata['raw_score']}")
+
+    context = f"detected on {symbol} at {anomaly['price']:.4f}"
+    return f"{', '.join(parts)} {context} — {anomaly['severity']} severity"
+
+
+class AnomalyConsumer(BaseConsumer):
+    """Consumer that detects and persists market anomalies."""
+
+    def __init__(self, **kwargs):
+        super().__init__(**kwargs)
+        self.pipeline = DetectionPipeline()
+
+    async def process_message(self, key: Optional[str], value: dict[str, Any]) -> None:
+        """Process a market tick: run detection, store anomalies."""
+        symbol = value.get("symbol", key or "UNKNOWN")
+        price = value.get("price")
+
+        if price is None:
+            logger.debug("[SKIP] No price in message for %s — skipping", symbol)
+            return
+
+        timestamp_str = value.get("timestamp")
+        timestamp = (
+            datetime.fromisoformat(timestamp_str)
+            if timestamp_str
+            else datetime.now(timezone.utc)
+        )
+
+        anomalies = self.pipeline.detect(
+            asset=symbol,
+            price=float(price),
+            timestamp=timestamp,
+        )
+
+        if not anomalies:
+            return
+
+        async with async_session_factory() as session:
+            try:
+                for anomaly in anomalies:
+                    flags = {"z_flag": False, "ewma_flag": False, "pca_flag": False}
+                    flag_key = FLAG_BY_TYPE.get(anomaly["type"])
+                    if flag_key:
+                        flags[flag_key] = True
+
+                    session.add(AnomalyEvent(
+                        timestamp=timestamp,
+                        symbol=symbol,
+                        anomaly_score=round(float(anomaly["score"]), 3),
+                        z_flag=flags["z_flag"],
+                        ewma_flag=flags["ewma_flag"],
+                        pca_flag=flags["pca_flag"],
+                        description=build_description(symbol, anomaly),
+                    ))
+                    logger.warning(
+                        "[ANOMALY] %s score=%.3f type=%s severity=%s",
+                        symbol,
+                        anomaly["score"],
+                        anomaly["type"],
+                        anomaly["severity"],
+                    )
+                await session.commit()
+            except Exception as e:
+                await session.rollback()
+                logger.error(
+                    "[DB] Failed to persist anomalies for %s: %s",
+                    symbol,
+                    e,
+                    exc_info=True,
+                )
+                raise
+
+
+async def main() -> None:
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
+        datefmt="%Y-%m-%d %H:%M:%S",
+    )
+    consumer = AnomalyConsumer()
+    logger.info(
+        "Anomaly consumer starting: servers=%s topic=%s group=%s",
+        consumer.bootstrap_servers,
+        consumer.topic,
+        consumer.group_id,
+    )
+    try:
+        await consumer.run()
+    except KeyboardInterrupt:
+        logger.info("Interrupted — shutting down")
+
+
+if __name__ == "__main__":
+    asyncio.run(main())

@@ -1,0 +1,174 @@
+services:
+  zookeeper:
+    image: confluentinc/cp-zookeeper:7.5.0
+    container_name: zookeeper
+    environment:
+      ZOOKEEPER_CLIENT_PORT: 2181
+      ZOOKEEPER_TICK_TIME: 2000
+    networks:
+      - anomaly-net
+
+  kafka:
+    image: confluentinc/cp-kafka:7.5.0
+    container_name: kafka
+    ports:
+      - "9092:9092"
+    depends_on:
+      - zookeeper
+    environment:
+      KAFKA_BROKER_ID: 1
+      KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+      KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://kafka:29092,PLAINTEXT_HOST://localhost:9092
+      KAFKA_LISTENER_SECURITY_PROTOCOL_MAP: PLAINTEXT:PLAINTEXT,PLAINTEXT_HOST:PLAINTEXT
+      KAFKA_INTER_BROKER_LISTENER_NAME: PLAINTEXT
+      KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      KAFKA_AUTO_CREATE_TOPICS_ENABLE: "true"
+      KAFKA_LOG_RETENTION_HOURS: 168
+      KAFKA_LOG_RETENTION_BYTES: 1073741824
+    healthcheck:
+      test: ["CMD-SHELL", "kafka-broker-api-versions --bootstrap-server localhost:9092 || exit 1"]
+      interval: 10s
+      timeout: 10s
+      retries: 12
+      start_period: 15s
+    networks:
+      - anomaly-net
+
+  postgres:
+    image: postgres:15
+    container_name: postgres
+    ports:
+      - "5432:5432"
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: password
+      POSTGRES_DB: market_anomalies
+    volumes:
+      - pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d market_anomalies"]
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - anomaly-net
+
+  fastapi:
+    build:
+      context: .
+      dockerfile: src/api/Dockerfile
+    container_name: fastapi
+    ports:
+      - "8000:8000"
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: "postgresql://postgres:password@postgres:5432/market_anomalies"
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - anomaly-net
+    restart: unless-stopped
+
+  streamlit:
+    build:
+      context: .
+      dockerfile: dashboard/Dockerfile
+    container_name: streamlit
+    ports:
+      - "8501:8501"
+    env_file:
+      - .env
+    environment:
+      BACKEND_URL: http://fastapi:8000
+    depends_on:
+      - fastapi
+    networks:
+      - anomaly-net
+    restart: unless-stopped
+
+  producer:
+    build:
+      context: .
+      dockerfile: src/producers/Dockerfile
+    container_name: producer
+    env_file:
+      - .env
+    environment:
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      FINNHUB_API_KEY: ${FINNHUB_API_KEY:-}
+    depends_on:
+      kafka:
+        condition: service_healthy
+    networks:
+      - anomaly-net
+    restart: unless-stopped
+
+  feature-consumer:
+    build:
+      context: .
+      dockerfile: src/consumers/Dockerfile
+    container_name: feature-consumer
+    command: python -m src.consumers.feature_consumer
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: "postgresql://postgres:password@postgres:5432/market_anomalies"
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - anomaly-net
+    restart: unless-stopped
+
+  anomaly-consumer:
+    build:
+      context: .
+      dockerfile: src/consumers/Dockerfile
+    container_name: anomaly-consumer
+    command: python -m src.consumers.anomaly_consumer
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: "postgresql://postgres:password@postgres:5432/market_anomalies"
+      KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+    depends_on:
+      kafka:
+        condition: service_healthy
+      postgres:
+        condition: service_healthy
+    networks:
+      - anomaly-net
+    restart: unless-stopped
+
+  scheduler:
+    build:
+      context: .
+      dockerfile: src/detection/Dockerfile
+    container_name: scheduler
+    env_file:
+      - .env
+    environment:
+      DATABASE_URL: "postgresql://postgres:password@postgres:5432/market_anomalies"
+    depends_on:
+      postgres:
+        condition: service_healthy
+    networks:
+      - anomaly-net
+    restart: unless-stopped
+
+networks:
+  anomaly-net:
+    driver: bridge
+
+volumes:
+  pgdata:
+    name: anomaly-pgdata

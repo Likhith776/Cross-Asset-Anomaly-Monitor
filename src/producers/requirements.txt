@@ -1,0 +1,7 @@
+kafka-python==2.0.2
+aiokafka==0.11.0
+yfinance==1.6.0
+pandas
+numpy
+requests
+python-dotenv==1.0.0
