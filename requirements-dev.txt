@@ -1,0 +1,13 @@
+# Loose dependency set for running the test suite locally and in CI.
+# The service containers build from their own pinned requirements files.
+numpy
+pandas
+scikit-learn
+psycopg2-binary
+python-dotenv
+fastapi
+sqlalchemy[asyncio]
+asyncpg
+pydantic
+requests
+pytest
