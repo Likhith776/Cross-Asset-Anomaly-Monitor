@@ -27,8 +27,11 @@ load_dotenv()
 DATABASE_URL = os.getenv("DATABASE_URL", "postgresql://postgres:password@localhost:5432/market_anomalies")
 ASYNC_DATABASE_URL = DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1)
 
-engine = create_async_engine(
-    ASYNC_DATABASE_URL,
+# Optional second database holding the seeded demo dataset, kept fully
+# separate from live pipeline data. Empty string disables demo mode.
+DEMO_DATABASE_URL = os.getenv("DEMO_DATABASE_URL", "")
+
+_engine_kwargs = dict(
     pool_size=10,
     max_overflow=20,
     pool_pre_ping=True,
@@ -39,21 +42,30 @@ engine = create_async_engine(
     },
 )
 
-async_session_factory = async_sessionmaker(
-    bind=engine,
+engine = create_async_engine(ASYNC_DATABASE_URL, **_engine_kwargs)
+
+demo_engine = (
+    create_async_engine(
+        DEMO_DATABASE_URL.replace("postgresql://", "postgresql+asyncpg://", 1),
+        **_engine_kwargs,
+    )
+    if DEMO_DATABASE_URL
+    else None
+)
+
+_session_kwargs = dict(
     class_=AsyncSession,
     expire_on_commit=False,
     autoflush=False,
 )
 
+async_session_factory = async_sessionmaker(bind=engine, **_session_kwargs)
 
-async def get_session() -> AsyncSession:
-    """FastAPI dependency that yields an async database session."""
-    async with async_session_factory() as session:
-        try:
-            yield session
-        finally:
-            await session.close()
+demo_session_factory = (
+    async_sessionmaker(bind=demo_engine, **_session_kwargs)
+    if demo_engine is not None
+    else None
+)
 
 
 class Base(DeclarativeBase):

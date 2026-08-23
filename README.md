@@ -73,10 +73,26 @@ DATABASE_URL=postgresql://postgres:password@localhost:5432/market_anomalies pyth
 
 - **Dashboard**: http://localhost:8501 — live asset status with per-symbol
   data freshness (live / delayed / stale), correlation heatmap, and an
-  anomaly timeline with selectable time windows (1H–7D/ALL). The seeded
-  demo-data region is shaded automatically so it's distinguishable from
-  live pipeline data.
+  anomaly timeline with selectable time windows (1H–7D/ALL).
 - **API docs**: http://localhost:8000/docs
+
+## Demo dataset (kept separate from live data)
+
+Synthetic demo data lives in its own database (`market_anomalies_demo`)
+and is never blended with live pipeline data. Toggle **LIVE / DEMO** in
+the dashboard header; demo mode shows a synthetic-data banner on every
+view. All API endpoints accept `?dataset=live|demo` (default `live`).
+
+Create/refresh the demo dataset:
+
+```bash
+docker exec postgres createdb -U postgres market_anomalies_demo   # first time only
+DATABASE_URL=postgresql://postgres:password@localhost:5432/market_anomalies_demo python scripts/init_db.py
+DATABASE_URL=postgresql://postgres:password@localhost:5432/market_anomalies_demo DROP_EXISTING=1 python scripts/seed_demo_data.py
+```
+
+Demo timestamps are generated relative to seeding time, so reseed before
+showing if the dataset has aged (demo mode defaults the timeline to ALL).
 
 ## Services
 

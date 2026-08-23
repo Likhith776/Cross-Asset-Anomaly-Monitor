@@ -65,6 +65,7 @@ services:
       - .env
     environment:
       DATABASE_URL: "postgresql://postgres:password@postgres:5432/market_anomalies"
+      DEMO_DATABASE_URL: "postgresql://postgres:password@postgres:5432/market_anomalies_demo"
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
     depends_on:
       kafka:

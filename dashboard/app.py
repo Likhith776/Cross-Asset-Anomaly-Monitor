@@ -61,6 +61,12 @@ def _fetch(path: str, params: dict = None) -> Optional[Any]:
         return None
 
 
+def _dataset_params(dataset: str, params: dict = None) -> dict:
+    params = dict(params or {})
+    params["dataset"] = dataset
+    return params
+
+
 def fetch_health() -> dict:
     data = _fetch("/health")
     if data:
@@ -69,43 +75,43 @@ def fetch_health() -> dict:
     return get_health()
 
 
-def fetch_assets() -> list[dict]:
-    data = _fetch("/assets")
+def fetch_assets(dataset: str = "live") -> list[dict]:
+    data = _fetch("/assets", _dataset_params(dataset))
     if data is not None:
         return data
     from mock_data import get_assets
     return get_assets()
 
 
-def fetch_anomalies(limit: int = 50, min_score: float = 0.0) -> list[dict]:
-    data = _fetch("/anomalies", {"limit": limit, "min_score": min_score})
+def fetch_anomalies(dataset: str = "live", limit: int = 50, min_score: float = 0.0) -> list[dict]:
+    data = _fetch("/anomalies", _dataset_params(dataset, {"limit": limit, "min_score": min_score}))
     if data is not None:
         return data
     from mock_data import get_anomalies
     return get_anomalies(limit=limit, min_score=min_score)
 
 
-def fetch_correlations() -> dict:
-    data = _fetch("/correlations")
+def fetch_correlations(dataset: str = "live") -> dict:
+    data = _fetch("/correlations", _dataset_params(dataset))
     if data is not None:
         return data
     from mock_data import get_correlations
     return get_correlations()
 
 
-def fetch_chart(symbol: str, limit: int = 100, window: Optional[int] = None) -> list[dict]:
+def fetch_chart(symbol: str, dataset: str = "live", limit: int = 100, window: Optional[int] = None) -> list[dict]:
     params = {"limit": limit}
     if window is not None:
         params["window_minutes"] = window
-    data = _fetch(f"/chart/{symbol}", params)
+    data = _fetch(f"/chart/{symbol}", _dataset_params(dataset, params))
     if data is not None:
         return data
     from mock_data import get_chart
     return get_chart(symbol, limit=limit)
 
 
-def fetch_meta() -> dict:
-    data = _fetch("/meta")
+def fetch_meta(dataset: str = "live") -> dict:
+    data = _fetch("/meta", _dataset_params(dataset))
     if data:
         return data
     # Mock mode has no seeded data
@@ -224,6 +230,17 @@ st.markdown("""
         color: #fbbf24;
         border: 1px solid rgba(251, 191, 36, 0.3);
     }
+    .demo-banner {
+        background: rgba(251, 191, 36, 0.12);
+        border: 1px solid rgba(251, 191, 36, 0.45);
+        color: #fbbf24;
+        border-radius: 6px;
+        padding: 0.55rem 1rem;
+        font-size: 0.9rem;
+        font-weight: 600;
+        text-align: center;
+        margin-bottom: 1rem;
+    }
     [data-testid="stMetricValue"] {
         font-size: 1.6rem !important;
     }
@@ -257,60 +274,79 @@ st.markdown("""
 # ---------------------------------------------------------------------------
 
 @st.cache_data(ttl=30)
-def _load_assets():
-    return fetch_assets()
+def _load_assets(dataset: str):
+    return fetch_assets(dataset)
 
 
 @st.cache_data(ttl=30)
-def _load_anomalies():
-    return fetch_anomalies(limit=50, min_score=0.0)
+def _load_anomalies(dataset: str):
+    return fetch_anomalies(dataset, limit=50, min_score=0.0)
 
 
 @st.cache_data(ttl=60)
-def _load_correlations():
-    return fetch_correlations()
+def _load_correlations(dataset: str):
+    return fetch_correlations(dataset)
 
 
 @st.cache_data(ttl=300)
-def _load_meta():
-    return fetch_meta()
+def _load_meta(dataset: str):
+    return fetch_meta(dataset)
 
 
 @st.cache_data(ttl=30)
-def _load_chart(symbol: str, window_label: str):
+def _load_chart(symbol: str, window_label: str, dataset: str):
     window = CHART_WINDOWS.get(window_label)
     if window is not None:
-        return fetch_chart(symbol, limit=2000, window=window)
-    return fetch_chart(symbol, limit=2000)
+        return fetch_chart(symbol, dataset=dataset, limit=2000, window=window)
+    return fetch_chart(symbol, dataset=dataset, limit=2000)
 
 
 # ---------------------------------------------------------------------------
-# 1. Header
+# 1. Header + dataset mode
 # ---------------------------------------------------------------------------
 
 refresh_time = datetime.now(timezone.utc).strftime("%H:%M:%S UTC")
 badge_class = "badge-live" if not USING_MOCK else "badge-mock"
 badge_text = "LIVE" if not USING_MOCK else "DEMO"
 
-st.markdown(
-    f"""
-    <div class="app-header">
-        <h1>
-            📊 Cross-Asset Anomaly Monitor
-            <span class="data-source-badge {badge_class}">{badge_text}</span>
-        </h1>
-        <p>Real-time anomaly detection across equities, crypto, commodities, FX & rates &nbsp;·&nbsp; Last refresh: {refresh_time}</p>
-    </div>
-    """,
-    unsafe_allow_html=True,
-)
+header_col, mode_col = st.columns([5, 1])
+with header_col:
+    st.markdown(
+        f"""
+        <div class="app-header">
+            <h1>
+                📊 Cross-Asset Anomaly Monitor
+                <span class="data-source-badge {badge_class}">{badge_text}</span>
+            </h1>
+            <p>Real-time anomaly detection across equities, crypto, commodities, FX & rates &nbsp;·&nbsp; Last refresh: {refresh_time}</p>
+        </div>
+        """,
+        unsafe_allow_html=True,
+    )
+with mode_col:
+    data_mode = st.radio(
+        "Dataset",
+        options=["LIVE", "DEMO"],
+        horizontal=True,
+        label_visibility="collapsed",
+    )
+
+DATASET = data_mode.lower()
+DEMO_MODE = DATASET == "demo"
+
+if DEMO_MODE:
+    st.markdown(
+        '<div class="demo-banner">⚠️ DEMO MODE — SYNTHETIC DATA · '
+        'Prices and anomalies are seeded demo values, NOT real market data</div>',
+        unsafe_allow_html=True,
+    )
 
 # ---------------------------------------------------------------------------
 # 2. Top metrics row
 # ---------------------------------------------------------------------------
 
-assets = _load_assets()
-anomalies = _load_anomalies()
+assets = _load_assets(DATASET)
+anomalies = _load_anomalies(DATASET)
 
 total_assets = len(assets)
 active_anomalies = sum(1 for a in anomalies if a["anomaly_score"] > 0.5)
@@ -339,7 +375,7 @@ with col4:
 st.markdown('<div class="section-header">Asset Status</div>', unsafe_allow_html=True)
 
 if assets:
-    meta = _load_meta()
+    meta = _load_meta(DATASET)
     try:
         now_ref = datetime.fromisoformat(meta["server_time"])
     except Exception:
@@ -347,23 +383,28 @@ if assets:
 
     table_data = []
     for a in assets:
-        age_s = None
-        if a.get("timestamp"):
-            try:
-                ts = a["timestamp"]
-                if isinstance(ts, str):
-                    ts = datetime.fromisoformat(ts)
-                age_s = (now_ref - ts).total_seconds()
-            except Exception:
-                age_s = None
-        age_str, status = _freshness_status(age_s)
+        if DEMO_MODE:
+            # Static seeded dataset — age/status are meaningless
+            freshness = "static"
+        else:
+            age_s = None
+            if a.get("timestamp"):
+                try:
+                    ts = a["timestamp"]
+                    if isinstance(ts, str):
+                        ts = datetime.fromisoformat(ts)
+                    age_s = (now_ref - ts).total_seconds()
+                except Exception:
+                    age_s = None
+            age_str, status = _freshness_status(age_s)
+            freshness = f"{_fmt_age(age_s)} · {status}"
         table_data.append({
             "Symbol": a["symbol"],
             "Price": a.get("price"),
             "1m Return": _fmt_pct(a.get("return_1m")),
             "Z-Score": a.get("z_score"),
             "EWMA Vol": a.get("ewma_vol"),
-            "Freshness": f"{_fmt_age(age_s)} · {status}",
+            "Freshness": freshness,
             "Risk Level": _risk_badge(a.get("risk_level", "low")),
         })
     df = pd.DataFrame(table_data)
@@ -415,7 +456,7 @@ else:
 
 st.markdown('<div class="section-header">Cross-Asset Correlations</div>', unsafe_allow_html=True)
 
-corr_data = _load_correlations()
+corr_data = _load_correlations(DATASET)
 
 if corr_data and corr_data.get("labels"):
     labels = corr_data["labels"]
@@ -485,16 +526,17 @@ with chart_col1:
         label_visibility="collapsed",
     )
 with chart_col2:
+    default_window = "ALL" if DEMO_MODE else DEFAULT_WINDOW
     chart_window = st.selectbox(
         "Window",
         options=list(CHART_WINDOWS.keys()),
-        index=list(CHART_WINDOWS.keys()).index(DEFAULT_WINDOW),
+        index=list(CHART_WINDOWS.keys()).index(default_window),
         label_visibility="collapsed",
     )
 with chart_col3:
     st.write("")
 
-chart_data = _load_chart(chart_symbol, chart_window)
+chart_data = _load_chart(chart_symbol, chart_window, DATASET)
 
 if chart_data:
     df_chart = pd.DataFrame(chart_data)
@@ -550,7 +592,7 @@ if chart_data:
     # Shade the seeded-demo portion when the visible window spans the
     # demo/live boundary reported by the API
     try:
-        meta = _load_meta()
+        meta = _load_meta(DATASET)
         demo_end = meta.get("demo_data_end")
         if isinstance(demo_end, str):
             demo_end = datetime.fromisoformat(demo_end)

@@ -18,7 +18,13 @@ from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from src.api.database import AnomalyEvent, CorrelationSnapshot, MarketFeature, get_session
+from src.api.database import (
+    AnomalyEvent,
+    CorrelationSnapshot,
+    MarketFeature,
+    async_session_factory,
+    demo_session_factory,
+)
 from src.api.models import (
     AnomalyEventResponse,
     AssetStatus,
@@ -78,6 +84,34 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+
+# ---------------------------------------------------------------------------
+# Dataset routing (live pipeline data vs seeded demo data)
+# ---------------------------------------------------------------------------
+
+async def get_session(
+    dataset: str = Query("live", pattern="^(live|demo)$"),
+) -> AsyncSession:
+    """
+    FastAPI dependency that yields an async database session.
+
+    Every endpoint accepts ?dataset=live|demo (default live). Live reads
+    the pipeline's primary database; demo reads the separate seeded
+    demo database (DEMO_DATABASE_URL) so the two never blend.
+    """
+    if dataset == "demo" and demo_session_factory is None:
+        raise HTTPException(
+            status_code=503,
+            detail="Demo dataset not configured — set DEMO_DATABASE_URL and seed it "
+                   "(see README: Demo dataset).",
+        )
+    factory = demo_session_factory if dataset == "demo" else async_session_factory
+    async with factory() as session:
+        try:
+            yield session
+        finally:
+            await session.close()
 
 
 # ---------------------------------------------------------------------------
@@ -351,7 +385,10 @@ async def get_anomalies_by_symbol(
 
 
 @app.get("/meta", response_model=MetaResponse)
-async def get_meta(session: AsyncSession = Depends(get_session)):
+async def get_meta(
+    dataset: str = Query("live", pattern="^(live|demo)$"),
+    session: AsyncSession = Depends(get_session),
+):
     """
     Dataset metadata for dashboard rendering.
 
@@ -359,7 +396,8 @@ async def get_meta(session: AsyncSession = Depends(get_session)):
     (their timestamp predates their created_at by more than 5 minutes),
     while live rows are written within seconds of their timestamp. The
     boundary is the newest backdated timestamp, i.e. where demo data
-    ends and live data begins.
+    ends and live data begins. Always null for the demo dataset itself
+    (the whole dataset is demo — the dashboard badges it instead).
     """
     result = await session.execute(text("""
         SELECT MAX(timestamp)
@@ -369,7 +407,7 @@ async def get_meta(session: AsyncSession = Depends(get_session)):
     demo_end = result.scalar()
     return MetaResponse(
         server_time=datetime.now(timezone.utc),
-        demo_data_end=demo_end,
+        demo_data_end=demo_end if dataset == "live" else None,
     )
 
 
