@@ -38,7 +38,7 @@ services:
       - "5432:5432"
     environment:
       POSTGRES_USER: postgres
-      POSTGRES_PASSWORD: password
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-password}
       POSTGRES_DB: market_anomalies
     volumes:
       - pgdata:/var/lib/postgresql/data
@@ -61,8 +61,8 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: "postgresql://postgres:password@postgres:5432/market_anomalies"
-      DEMO_DATABASE_URL: "postgresql://postgres:password@postgres:5432/market_anomalies_demo"
+      DATABASE_URL: "postgresql://postgres:${POSTGRES_PASSWORD:-password}@postgres:5432/market_anomalies"
+      DEMO_DATABASE_URL: "postgresql://postgres:${POSTGRES_PASSWORD:-password}@postgres:5432/market_anomalies_demo"
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
     depends_on:
       kafka:
@@ -116,7 +116,7 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: "postgresql://postgres:password@postgres:5432/market_anomalies"
+      DATABASE_URL: "postgresql://postgres:${POSTGRES_PASSWORD:-password}@postgres:5432/market_anomalies"
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
     depends_on:
       kafka:
@@ -136,7 +136,7 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: "postgresql://postgres:password@postgres:5432/market_anomalies"
+      DATABASE_URL: "postgresql://postgres:${POSTGRES_PASSWORD:-password}@postgres:5432/market_anomalies"
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
     depends_on:
       kafka:
@@ -155,8 +155,10 @@ services:
     env_file:
       - .env
     environment:
-      DATABASE_URL: "postgresql://postgres:password@postgres:5432/market_anomalies"
-      DEMO_DATABASE_URL: "postgresql://postgres:password@postgres:5432/market_anomalies_demo"
+      DATABASE_URL: "postgresql://postgres:${POSTGRES_PASSWORD:-password}@postgres:5432/market_anomalies"
+      DEMO_DATABASE_URL: "postgresql://postgres:${POSTGRES_PASSWORD:-password}@postgres:5432/market_anomalies_demo"
+    volumes:
+      - backups:/backups
     depends_on:
       postgres:
         condition: service_healthy
@@ -171,3 +173,5 @@ networks:
 volumes:
   pgdata:
     name: anomaly-pgdata
+  backups:
+    name: anomaly-backups

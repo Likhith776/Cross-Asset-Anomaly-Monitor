@@ -108,6 +108,30 @@ Manual immediate refresh: `docker exec demo-refresher sh -c "DROP_EXISTING=1 pyt
 
 Retention: `market_features` 30 days, `correlation_snapshots` 7 days.
 
+## Backups
+
+The scheduler dumps the live database daily at 01:00 UTC (plus once at
+startup) to the `anomaly-backups` volume in pg_dump custom format —
+compressed, retention keeps the newest 7. Restore with:
+
+```bash
+docker exec scheduler pg_restore --clean --if-exists --no-owner \
+  -d "$DATABASE_URL" /backups/<file>.dump
+```
+
+The demo database is regenerable from the seeder and is not backed up.
+
+## Deployment (hosted)
+
+The stack is written to deploy as-is to any Docker host — credentials
+come from the environment (`POSTGRES_PASSWORD` in `.env`), never
+hardcoded. Recommended path for an always-on deployment (portfolio
+live app): a small VPS, `git clone` + `.env` with strong values +
+`docker compose up -d --build`. Set `POSTGRES_PASSWORD` before the
+first start (it only applies when the data volume is initialized).
+Passwords with special characters must be URL-encoded in connection
+strings.
+
 ## Configuration (`.env`)
 
 | Variable                 | Purpose                                              |

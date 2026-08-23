@@ -23,6 +23,7 @@ Usage:
     python -m src.detection.scheduler
 """
 
+import glob
 import logging
 import os
 import signal
@@ -53,6 +54,13 @@ FEATURES_RETENTION_DAYS = 30
 CORRELATIONS_RETENTION_DAYS = 7
 DAILY_CLEANUP_HOUR_UTC = 0                 # 00:00 UTC, like the DAG
 DB_CONNECT_BACKOFF_SECONDS = 10
+
+# Live-database backups: pg_dump custom format (compressed) into BACKUP_DIR
+# (a mounted volume in deployment). The demo database is regenerable from
+# the seeder and is intentionally not backed up.
+BACKUP_HOUR_UTC = 1                        # 01:00 UTC, after the cleanup cycle
+BACKUP_RETENTION_FILES = 7
+BACKUP_DIR = os.getenv("BACKUP_DIR", "/backups")
 
 # Demo dataset auto-refresh: wipe + regenerate with fresh timestamps so the
 # dashboard's DEMO mode always shows a current-looking 7-day window.
@@ -377,14 +385,72 @@ def run_demo_refresh() -> bool:
 
 
 # ---------------------------------------------------------------------------
+# Live database backup
+# ---------------------------------------------------------------------------
+
+def run_backup() -> bool:
+    """
+    Dump the live database in pg_dump custom format (natively compressed,
+    restorable via pg_restore), pruning old backups beyond retention.
+    """
+    try:
+        os.makedirs(BACKUP_DIR, exist_ok=True)
+    except OSError as e:
+        logger.error("[BACKUP] Cannot create %s: %s", BACKUP_DIR, e)
+        return False
+
+    stamp = datetime.now(timezone.utc).strftime("%Y%m%d_%H%M%S")
+    path = os.path.join(BACKUP_DIR, f"market_anomalies_{stamp}.dump")
+
+    logger.info("[BACKUP] Dumping live database to %s ...", path)
+    try:
+        result = subprocess.run(
+            [
+                "pg_dump", "--format=custom", "--no-owner", "--no-privileges",
+                "--file", path, DATABASE_URL,
+            ],
+            check=False,
+        )
+    except FileNotFoundError:
+        logger.error("[BACKUP] pg_dump not found — install postgresql-client in the image")
+        return False
+
+    if result.returncode != 0:
+        logger.error("[BACKUP] pg_dump failed (exit %d)", result.returncode)
+        if os.path.exists(path):
+            os.remove(path)
+        return False
+
+    # Retention: keep the newest N dumps
+    dumps = sorted(glob.glob(os.path.join(BACKUP_DIR, "market_anomalies_*.dump")))
+    for old in dumps[:-BACKUP_RETENTION_FILES] if len(dumps) > BACKUP_RETENTION_FILES else []:
+        os.remove(old)
+        logger.info("[BACKUP] Pruned %s", os.path.basename(old))
+
+    logger.info(
+        "[BACKUP] Saved %s (%d KiB) — retention keeps %d",
+        os.path.basename(path),
+        os.path.getsize(path) // 1024,
+        BACKUP_RETENTION_FILES,
+    )
+    return True
+
+
+def restore_instructions() -> None:
+    """Log the restore command so it's discoverable in the container logs."""
+    logger.info(
+        "[BACKUP] Restore with: pg_restore --clean --if-exists --no-owner "
+        "-d \"$DATABASE_URL\" /backups/<file>.dump"
+    )
+
+
+# ---------------------------------------------------------------------------
 # Main Loop
 # ---------------------------------------------------------------------------
 
-def next_cleanup_time(now: datetime) -> datetime:
-    """Next 00:00 UTC boundary after `now`."""
-    candidate = now.replace(
-        hour=DAILY_CLEANUP_HOUR_UTC, minute=0, second=0, microsecond=0
-    )
+def next_daily_time(now: datetime, hour: int) -> datetime:
+    """Next UTC boundary of the given hour after `now`."""
+    candidate = now.replace(hour=hour, minute=0, second=0, microsecond=0)
     if candidate <= now:
         candidate += timedelta(days=1)
     return candidate
@@ -415,13 +481,16 @@ def main() -> None:
                     DEMO_REFRESH_SECONDS, DEMO_DATABASE_URL.split("@")[-1])
     else:
         logger.info("  Demo:     disabled (DEMO_DATABASE_URL not set)")
+    logger.info("  Backup:   daily at %02d:00 UTC -> %s (keep %d)",
+                BACKUP_HOUR_UTC, BACKUP_DIR, BACKUP_RETENTION_FILES)
     logger.info("=" * 64)
 
     ensure_demo_schema()
 
     next_detection = datetime.now(timezone.utc)
-    next_cleanup = next_cleanup_time(datetime.now(timezone.utc))
-    next_demo_refresh = datetime.now(timezone.utc)  # seed once at startup
+    next_cleanup = next_daily_time(datetime.now(timezone.utc), DAILY_CLEANUP_HOUR_UTC)
+    next_backup = datetime.now(timezone.utc)               # verify at startup
+    next_demo_refresh = datetime.now(timezone.utc)         # seed once at startup
 
     # Run one cycle immediately on startup so the system is warm
     conn = get_connection()
@@ -437,13 +506,22 @@ def main() -> None:
                 next_demo_refresh = datetime.now(timezone.utc) + timedelta(seconds=DEMO_REFRESH_SECONDS)
                 continue
 
+            if now >= next_backup:
+                try:
+                    if run_backup():
+                        restore_instructions()
+                except Exception:
+                    logger.error("[BACKUP] Cycle crashed", exc_info=True)
+                next_backup = next_daily_time(datetime.now(timezone.utc), BACKUP_HOUR_UTC)
+                continue
+
             if now >= next_cleanup:
                 logger.info("[SCHED] Running daily cleanup cycle")
                 try:
                     run_cleanup_cycle(conn)
                 except Exception:
                     conn.rollback()
-                next_cleanup = next_cleanup_time(datetime.now(timezone.utc))
+                next_cleanup = next_daily_time(datetime.now(timezone.utc), DAILY_CLEANUP_HOUR_UTC)
                 continue
 
             if now >= next_detection:
