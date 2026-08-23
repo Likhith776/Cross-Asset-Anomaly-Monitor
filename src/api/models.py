@@ -18,6 +18,16 @@ class HealthResponse(BaseModel):
     db: str = Field(..., description="'connected' or error message")
 
 
+class MetaResponse(BaseModel):
+    """Response for GET /meta — dataset metadata for dashboard rendering."""
+    server_time: datetime = Field(..., description="Server UTC timestamp")
+    demo_data_end: Optional[datetime] = Field(
+        None,
+        description="End of seeded demo data (start of live data). "
+                    "None when the database contains only live data.",
+    )
+
+
 class AssetStatus(BaseModel):
     """Response for a single asset in GET /assets."""
     symbol: str

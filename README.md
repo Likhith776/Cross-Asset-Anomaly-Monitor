@@ -71,7 +71,11 @@ DATABASE_URL=postgresql://postgres:password@localhost:5432/market_anomalies pyth
 DATABASE_URL=postgresql://postgres:password@localhost:5432/market_anomalies python scripts/seed_demo_data.py
 ```
 
-- **Dashboard**: http://localhost:8501
+- **Dashboard**: http://localhost:8501 — live asset status with per-symbol
+  data freshness (live / delayed / stale), correlation heatmap, and an
+  anomaly timeline with selectable time windows (1H–7D/ALL). The seeded
+  demo-data region is shaded automatically so it's distinguishable from
+  live pipeline data.
 - **API docs**: http://localhost:8000/docs
 
 ## Services

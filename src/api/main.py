@@ -25,6 +25,7 @@ from src.api.models import (
     ChartPoint,
     CorrelationMatrix,
     HealthResponse,
+    MetaResponse,
 )
 
 load_dotenv()
@@ -146,6 +147,21 @@ def classify_risk(score: float) -> str:
     if score >= RISK_LOW_MAX:
         return "medium"
     return "low"
+
+
+def downsample_points(points: list[ChartPoint], max_points: int = 1440) -> list[ChartPoint]:
+    """
+    Evenly thin a point list to at most max_points, always keeping the
+    latest point. Scores are computed on the dense series before calling
+    this so rolling windows stay accurate.
+    """
+    if len(points) <= max_points:
+        return points
+    stride = -(-len(points) // max_points)  # ceil division
+    sampled = points[::stride]
+    if sampled[-1] is not points[-1]:
+        sampled.append(points[-1])
+    return sampled
 
 
 # ---------------------------------------------------------------------------
@@ -334,6 +350,29 @@ async def get_anomalies_by_symbol(
     ]
 
 
+@app.get("/meta", response_model=MetaResponse)
+async def get_meta(session: AsyncSession = Depends(get_session)):
+    """
+    Dataset metadata for dashboard rendering.
+
+    demo_data_end is detected automatically: seeded rows are backdated
+    (their timestamp predates their created_at by more than 5 minutes),
+    while live rows are written within seconds of their timestamp. The
+    boundary is the newest backdated timestamp, i.e. where demo data
+    ends and live data begins.
+    """
+    result = await session.execute(text("""
+        SELECT MAX(timestamp)
+        FROM market_features
+        WHERE timestamp <= created_at - INTERVAL '5 minutes'
+    """))
+    demo_end = result.scalar()
+    return MetaResponse(
+        server_time=datetime.now(timezone.utc),
+        demo_data_end=demo_end,
+    )
+
+
 @app.get("/correlations", response_model=CorrelationMatrix)
 async def get_correlations(session: AsyncSession = Depends(get_session)):
     """
@@ -393,14 +432,20 @@ async def get_correlations(session: AsyncSession = Depends(get_session)):
 async def get_chart(
     symbol: str,
     limit: int = Query(100, ge=1, le=2000),
+    window_minutes: Optional[int] = Query(None, ge=1, le=43200),
     session: AsyncSession = Depends(get_session),
 ):
     """
     Time-series data for charting price and anomaly score.
 
-    Fetches extra history rows beyond the requested limit to ensure
-    the composite score can be computed with proper rolling windows
-    for every returned data point.
+    Two modes:
+      - window_minutes set: return all rows in the trailing window
+        (downsampled to <= 1440 points for charting). `limit` is ignored.
+      - otherwise: return the most recent `limit` rows (legacy behavior).
+
+    Both modes fetch extra history rows before the display range so the
+    composite score can be computed with proper rolling windows for
+    every returned data point.
     """
     if symbol not in SYMBOLS:
         raise HTTPException(
@@ -408,32 +453,57 @@ async def get_chart(
             detail=f"Unknown symbol: {symbol}. Valid: {', '.join(SYMBOLS)}",
         )
 
-    # Fetch extra rows for rolling window computation
     history_padding = 100
-    total_fetch = limit + history_padding
 
-    stmt = text("""
-        SELECT timestamp, symbol, price, return_1m, z_score,
-               ewma_vol, pca_residual, volume
-        FROM market_features
-        WHERE symbol = :symbol
-        ORDER BY timestamp DESC
-        LIMIT :limit
-    """)
-    result = await session.execute(stmt, {"symbol": symbol, "limit": total_fetch})
-    all_rows = list(reversed(result.mappings().all()))
+    if window_minutes is not None:
+        window_stmt = text("""
+            SELECT timestamp, symbol, price, return_1m, z_score,
+                   ewma_vol, pca_residual, volume
+            FROM market_features
+            WHERE symbol = :symbol
+              AND timestamp >= NOW() - (:minutes * INTERVAL '1 minute')
+            ORDER BY timestamp ASC
+            LIMIT :cap
+        """)
+        window_rows = list((await session.execute(window_stmt, {
+            "symbol": symbol, "minutes": window_minutes, "cap": 43200,
+        })).mappings().all())
+
+        # Warmup history immediately before the window for rolling windows
+        hist_stmt = text("""
+            SELECT timestamp, symbol, price, return_1m, z_score,
+                   ewma_vol, pca_residual, volume
+            FROM market_features
+            WHERE symbol = :symbol
+              AND timestamp < NOW() - (:minutes * INTERVAL '1 minute')
+            ORDER BY timestamp DESC
+            LIMIT :padding
+        """)
+        hist_rows = list(reversed((await session.execute(hist_stmt, {
+            "symbol": symbol, "minutes": window_minutes, "padding": history_padding,
+        })).mappings().all()))
+
+        all_rows = hist_rows + window_rows
+        history_start = len(hist_rows)
+    else:
+        total_fetch = limit + history_padding
+        stmt = text("""
+            SELECT timestamp, symbol, price, return_1m, z_score,
+                   ewma_vol, pca_residual, volume
+            FROM market_features
+            WHERE symbol = :symbol
+            ORDER BY timestamp DESC
+            LIMIT :limit
+        """)
+        result = await session.execute(stmt, {"symbol": symbol, "limit": total_fetch})
+        all_rows = list(reversed(result.mappings().all()))
+        history_start = history_padding if len(all_rows) > history_padding else 0
 
     if not all_rows:
         return []
 
     # Split: history rows (for computation) and display rows (to return)
-    if len(all_rows) <= history_padding:
-        # Not enough data for proper windows — return what we have
-        display_rows = all_rows
-        history_start = 0
-    else:
-        display_rows = all_rows[history_padding:]
-        history_start = history_padding
+    display_rows = all_rows[history_start:]
 
     # Compute composite score for each display row
     points: list[ChartPoint] = []
@@ -474,7 +544,7 @@ async def get_chart(
             composite_score=score,
         ))
 
-    return points
+    return downsample_points(points)
 
 
 # ---------------------------------------------------------------------------

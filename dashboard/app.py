@@ -42,6 +42,10 @@ def _resolve_backend_url() -> Optional[str]:
 BACKEND_URL = _resolve_backend_url()
 USING_MOCK = BACKEND_URL is None
 
+# Anomaly-timeline window options: label -> trailing minutes (None = last N rows)
+CHART_WINDOWS = {"1H": 60, "6H": 360, "24H": 1440, "7D": 7 * 1440, "ALL": None}
+DEFAULT_WINDOW = "24H"
+
 # ---------------------------------------------------------------------------
 # Data fetching with mock fallback
 # ---------------------------------------------------------------------------
@@ -89,12 +93,23 @@ def fetch_correlations() -> dict:
     return get_correlations()
 
 
-def fetch_chart(symbol: str, limit: int = 100) -> list[dict]:
-    data = _fetch(f"/chart/{symbol}", {"limit": limit})
+def fetch_chart(symbol: str, limit: int = 100, window: Optional[int] = None) -> list[dict]:
+    params = {"limit": limit}
+    if window is not None:
+        params["window_minutes"] = window
+    data = _fetch(f"/chart/{symbol}", params)
     if data is not None:
         return data
     from mock_data import get_chart
     return get_chart(symbol, limit=limit)
+
+
+def fetch_meta() -> dict:
+    data = _fetch("/meta")
+    if data:
+        return data
+    # Mock mode has no seeded data
+    return {"server_time": datetime.now(timezone.utc).isoformat(), "demo_data_end": None}
 
 
 # ---------------------------------------------------------------------------
@@ -134,6 +149,36 @@ def _ts_display(iso: Optional[str]) -> str:
         return dt.strftime("%Y-%m-%d %H:%M:%S")
     except Exception:
         return iso
+
+
+def _fmt_age(seconds: Optional[float]) -> str:
+    """Compact human age: 42s / 18m / 3h / 2d."""
+    if seconds is None or seconds < 0:
+        return "—"
+    s = int(seconds)
+    if s < 90:
+        return f"{s}s"
+    if s < 5400:
+        return f"{s // 60}m"
+    if s < 172_800:
+        return f"{s // 3600}h"
+    return f"{s // 86400}d"
+
+
+def _freshness_status(age_seconds: Optional[float]) -> str:
+    """Classify data freshness.
+
+    Thresholds reflect the data sources: crypto/FX ticks arrive within
+    seconds; equities, futures, and yields are delayed ~10-20 minutes at
+    the source, so anything under 45 minutes is normal for them.
+    """
+    if age_seconds is None:
+        return "—", "unknown"
+    if age_seconds < 150:
+        return "live", "live"
+    if age_seconds < 45 * 60:
+        return "delayed", "delayed"
+    return "stale", "stale"
 
 
 # ---------------------------------------------------------------------------
@@ -226,9 +271,17 @@ def _load_correlations():
     return fetch_correlations()
 
 
+@st.cache_data(ttl=300)
+def _load_meta():
+    return fetch_meta()
+
+
 @st.cache_data(ttl=30)
-def _load_chart(symbol: str):
-    return fetch_chart(symbol, limit=1440)
+def _load_chart(symbol: str, window_label: str):
+    window = CHART_WINDOWS.get(window_label)
+    if window is not None:
+        return fetch_chart(symbol, limit=2000, window=window)
+    return fetch_chart(symbol, limit=2000)
 
 
 # ---------------------------------------------------------------------------
@@ -286,14 +339,31 @@ with col4:
 st.markdown('<div class="section-header">Asset Status</div>', unsafe_allow_html=True)
 
 if assets:
+    meta = _load_meta()
+    try:
+        now_ref = datetime.fromisoformat(meta["server_time"])
+    except Exception:
+        now_ref = datetime.now(timezone.utc)
+
     table_data = []
     for a in assets:
+        age_s = None
+        if a.get("timestamp"):
+            try:
+                ts = a["timestamp"]
+                if isinstance(ts, str):
+                    ts = datetime.fromisoformat(ts)
+                age_s = (now_ref - ts).total_seconds()
+            except Exception:
+                age_s = None
+        age_str, status = _freshness_status(age_s)
         table_data.append({
             "Symbol": a["symbol"],
             "Price": a.get("price"),
             "1m Return": _fmt_pct(a.get("return_1m")),
             "Z-Score": a.get("z_score"),
             "EWMA Vol": a.get("ewma_vol"),
+            "Freshness": f"{_fmt_age(age_s)} · {status}",
             "Risk Level": _risk_badge(a.get("risk_level", "low")),
         })
     df = pd.DataFrame(table_data)
@@ -317,8 +387,18 @@ if assets:
             return "color: #fbbf24"
         return ""
 
+    def _color_freshness(val: str):
+        if val.endswith("live"):
+            return "color: #4ade80"
+        if val.endswith("delayed"):
+            return "color: #fbbf24"
+        if val.endswith("stale"):
+            return "color: #f87171"
+        return ""
+
     styled = df.style.map(_color_risk, subset=["Risk Level"])
     styled = styled.map(_color_zscore, subset=["Z-Score"])
+    styled = styled.map(_color_freshness, subset=["Freshness"])
     styled = styled.format({
         "Price": "{:,.4f}",
         "EWMA Vol": "{:.8f}",
@@ -397,7 +477,7 @@ else:
 
 st.markdown('<div class="section-header">Anomaly Timeline</div>', unsafe_allow_html=True)
 
-chart_col1, chart_col2 = st.columns([1, 4])
+chart_col1, chart_col2, chart_col3 = st.columns([1, 1, 3])
 with chart_col1:
     chart_symbol = st.selectbox(
         "Symbol",
@@ -405,13 +485,22 @@ with chart_col1:
         label_visibility="collapsed",
     )
 with chart_col2:
+    chart_window = st.selectbox(
+        "Window",
+        options=list(CHART_WINDOWS.keys()),
+        index=list(CHART_WINDOWS.keys()).index(DEFAULT_WINDOW),
+        label_visibility="collapsed",
+    )
+with chart_col3:
     st.write("")
 
-chart_data = _load_chart(chart_symbol)
+chart_data = _load_chart(chart_symbol, chart_window)
 
 if chart_data:
     df_chart = pd.DataFrame(chart_data)
-    df_chart["timestamp"] = pd.to_datetime(df_chart["timestamp"])
+    # Mixed ISO variants (with/without fractional seconds, Z/+00:00) —
+    # pandas 2.x strict parsing needs the explicit ISO8601 format
+    df_chart["timestamp"] = pd.to_datetime(df_chart["timestamp"], format="ISO8601", utc=True)
 
     fig_chart = go.Figure()
 
@@ -458,9 +547,30 @@ if chart_data:
             showlegend=False,
         ))
 
+    # Shade the seeded-demo portion when the visible window spans the
+    # demo/live boundary reported by the API
+    try:
+        meta = _load_meta()
+        demo_end = meta.get("demo_data_end")
+        if isinstance(demo_end, str):
+            demo_end = datetime.fromisoformat(demo_end)
+        visible_start = df_chart["timestamp"].min()
+        if demo_end is not None and pd.notna(visible_start) and visible_start < demo_end:
+            fig_chart.add_vrect(
+                x0=visible_start,
+                x1=demo_end,
+                fillcolor="rgba(148, 163, 184, 0.10)",
+                line_width=0,
+                annotation_text="seeded demo data",
+                annotation_position="top left",
+                annotation_font=dict(size=10, color="rgba(255,255,255,0.45)"),
+            )
+    except Exception:
+        pass  # shading is cosmetic — never break the chart over it
+
     fig_chart.update_layout(
         title=dict(
-            text=f"{chart_symbol} — Anomaly Score & Price",
+            text=f"{chart_symbol} — Anomaly Score & Price ({chart_window})",
             font=dict(size=14, color="rgba(255,255,255,0.8)"),
             x=0.0,
             xanchor="left",
