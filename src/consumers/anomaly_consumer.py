@@ -26,10 +26,15 @@ from sqlalchemy import text
 
 from src.api.database import AnomalyEvent, async_session_factory
 from src.consumers.base import BaseConsumer
-from src.detection.anomaly_engine import should_insert_event
+from src.detection.anomaly_engine import SYMBOLS, should_insert_event
 from src.detection.pipeline import DetectionPipeline
 
 logger = logging.getLogger("anomaly_consumer")
+
+# Warm-up history size per symbol (oldest-first closes) used to preload
+# detector state at startup. Covers the largest detector requirement
+# (window 100) with margin.
+WARMUP_ROWS = 120
 
 # Map tick-level detector types to the flag columns of anomaly_events.
 # The EWMA flag is owned by the batch engine; no tick-level detector
@@ -66,6 +71,32 @@ class AnomalyConsumer(BaseConsumer):
     def __init__(self, **kwargs):
         super().__init__(**kwargs)
         self.pipeline = DetectionPipeline()
+
+    @staticmethod
+    async def fetch_warmup_closes() -> dict[str, list[tuple[Any, float]]]:
+        """
+        Fetch recent closes per symbol (oldest-first) for warm-starting
+        the detection pipeline. Returns {} on failure — cold start.
+        """
+        closes: dict[str, list[tuple[Any, float]]] = {}
+        async with async_session_factory() as session:
+            result = await session.execute(
+                text("""
+                    SELECT timestamp, symbol, price FROM (
+                        SELECT timestamp, symbol, price,
+                               ROW_NUMBER() OVER (PARTITION BY symbol
+                                                  ORDER BY timestamp DESC) AS rn
+                        FROM market_features
+                        WHERE symbol = ANY(:symbols) AND price IS NOT NULL
+                    ) sub
+                    WHERE rn <= :limit
+                    ORDER BY symbol, timestamp ASC
+                """),
+                {"symbols": list(SYMBOLS), "limit": WARMUP_ROWS},
+            )
+            for ts, sym, price in result.all():
+                closes.setdefault(sym, []).append((ts, float(price)))
+        return closes
 
     @staticmethod
     async def _last_event(session: Any, symbol: str) -> tuple[Optional[datetime], Optional[float]]:
@@ -173,6 +204,25 @@ async def main() -> None:
         datefmt="%Y-%m-%d %H:%M:%S",
     )
     consumer = AnomalyConsumer()
+
+    # Warm-start detector state from recent market_features closes so
+    # tick-level detection is active from the first tick after a restart.
+    try:
+        closes = await consumer.fetch_warmup_closes()
+        counts = consumer.pipeline.warm_start(prices_by_symbol=closes)
+        total = sum(counts.values())
+        if total:
+            logger.info(
+                "[WARM-START] Preloaded %d price observations across %d symbols: %s",
+                total,
+                len(counts),
+                counts,
+            )
+        else:
+            logger.info("[WARM-START] No history available — starting with cold detectors")
+    except Exception:
+        logger.warning("[WARM-START] Failed — starting with cold detectors", exc_info=True)
+
     logger.info(
         "Anomaly consumer starting: servers=%s topic=%s group=%s",
         consumer.bootstrap_servers,

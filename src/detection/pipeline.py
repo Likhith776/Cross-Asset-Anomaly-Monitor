@@ -7,7 +7,9 @@ and aggregates the results.
 
 import logging
 from datetime import datetime
-from typing import Any
+from typing import Any, Optional
+
+import numpy as np
 
 from src.detection.base import BaseDetector, AnomalyEvent
 from src.detection.zscore import ZScoreDetector
@@ -69,6 +71,108 @@ class DetectionPipeline:
             len(self.detectors),
             [d.name for d in self.detectors],
         )
+
+    def warm_start(
+        self,
+        prices_by_symbol: dict[str, list[tuple[Any, float]]],
+    ) -> dict[str, int]:
+        """
+        Preload detector state from recent prices so tick-level detection
+        is fully active immediately after a restart, instead of after the
+        20-50 tick cold start each detector requires.
+
+        prices_by_symbol maps symbol -> oldest-first (timestamp, close)
+        samples. Detector price windows are refilled by replaying each
+        series; isolation forests are pre-trained per symbol when enough
+        samples exist; cross-asset correlation histories are rebuilt from
+        the warmed windows.
+
+        Returns per-symbol counts of replayed prices (all zeros -> cold).
+        """
+        counts: dict[str, int] = {}
+
+        # 1) Refill every detector's price windows by replaying each series
+        for symbol, samples in prices_by_symbol.items():
+            played = 0
+            for _, price in samples:
+                try:
+                    price_val = float(price)
+                except (TypeError, ValueError):
+                    continue
+                if not np.isfinite(price_val) or price_val <= 0:
+                    continue
+                for detector in self.detectors:
+                    try:
+                        detector._update_window(symbol, price_val)
+                    except Exception:
+                        logger.debug(
+                            "[WARM] window update failed on %s", detector.name,
+                            exc_info=True,
+                        )
+                played += 1
+            counts[symbol] = played
+
+        # 2) Pre-train isolation forests so outliers are detectable at once
+        from sklearn.ensemble import IsolationForest
+
+        for detector in self.detectors:
+            if not isinstance(detector, IsolationForestDetector):
+                continue
+            for symbol, window in detector._price_windows.items():
+                if len(window) < detector.min_observations or symbol in detector._models:
+                    continue
+                try:
+                    features = detector._extract_features(np.array(window))
+                    detector._models[symbol] = IsolationForest(
+                        contamination=detector.threshold,
+                        n_estimators=100,
+                        max_samples="auto",
+                        random_state=42,
+                        n_jobs=-1,
+                    )
+                    detector._models[symbol].fit(features)
+                    detector._observation_counts[symbol] = len(window)
+                    logger.debug(
+                        "[WARM] pre-trained %s for %s (%d obs)",
+                        detector.name, symbol, len(window),
+                    )
+                except Exception:
+                    logger.debug(
+                        "[WARM] iforest training failed for %s", symbol,
+                        exc_info=True,
+                    )
+
+        # 3) Rebuild correlation-break histories from the warmed windows
+        for detector in self.detectors:
+            if not isinstance(detector, CrossAssetCorrelationDetector):
+                continue
+            for asset_a, asset_b in detector.pairs:
+                pa = detector._price_windows.get(asset_a)
+                pb = detector._price_windows.get(asset_b)
+                if not pa or not pb:
+                    continue
+                min_len = min(len(pa), len(pb))
+                ret_a = detector._compute_returns(pa[-min_len:])
+                ret_b = detector._compute_returns(pb[-min_len:])
+                common = min(len(ret_a), len(ret_b))
+                ret_a, ret_b = ret_a[-common:], ret_b[-common:]
+                rolling = min(50, common)
+                step = 5
+                history = detector._corr_history.setdefault((asset_a, asset_b), [])
+                for end in range(rolling, common + 1, step):
+                    corr = np.corrcoef(ret_a[end - rolling:end], ret_b[end - rolling:end])[0, 1]
+                    if np.isnan(corr):
+                        continue
+                    history.append(float(corr))
+                    if len(history) > detector._history_window:
+                        history.pop(0)
+                if history:
+                    logger.debug(
+                        "[WARM] rebuilt correlation history %s/%s: %d samples",
+                        asset_a, asset_b, len(history),
+                    )
+
+        return counts
 
     def add_detector(self, detector: BaseDetector) -> None:
         """Add a custom detector to the pipeline."""

@@ -412,6 +412,46 @@ class FeatureWriter:
             )
             return False
 
+    def fetch_recent_features(
+        self,
+        symbols: list[str],
+        limit: int,
+    ) -> list[dict]:
+        """
+        Fetch the most recent `limit` feature rows per symbol (oldest
+        first) for warm-starting the consumer's rolling windows.
+
+        Returns [] on failure — the caller falls back to a cold start.
+        """
+        sql = """
+            SELECT timestamp, symbol, price, return_1m, return_5m, volume
+            FROM (
+                SELECT timestamp, symbol, price, return_1m, return_5m, volume,
+                       ROW_NUMBER() OVER (PARTITION BY symbol ORDER BY timestamp DESC) AS rn
+                FROM market_features
+                WHERE symbol = ANY(%(symbols)s)
+            ) sub
+            WHERE rn <= %(limit)s
+            ORDER BY symbol, timestamp ASC
+        """
+        try:
+            with self._conn.cursor() as cur:
+                cur.execute(sql, {"symbols": list(symbols), "limit": limit})
+                columns = [d[0] for d in cur.description]
+                rows = []
+                for row in cur.fetchall():
+                    record = dict(zip(columns, row))
+                    # Normalize numerics (DECIMAL -> float) for the windows
+                    for key in ("price", "return_1m", "return_5m"):
+                        if record[key] is not None:
+                            record[key] = float(record[key])
+                    rows.append(record)
+                return rows
+        except DatabaseError as e:
+            self._conn.rollback()
+            logger.error("[DB] Warm-start query failed: %s", e)
+            return []
+
     def close(self) -> None:
         """Close the database connection."""
         if self._conn is not None:
@@ -457,6 +497,25 @@ def create_consumer(
     return consumer
 
 
+def warm_start(
+    windows: SymbolWindows,
+    fetch_recent: Any,
+) -> dict[str, int]:
+    """
+    Preload rolling windows from the most recent market_features rows so
+    feature computation (z-score, EWMA, PCA, correlations) resumes at
+    full strength immediately after a restart — instead of after the
+    20-50 minute cold warm-up the windows otherwise need.
+
+    Returns per-symbol counts of preloaded rows (all zeros -> cold start).
+    """
+    counts: dict[str, int] = {}
+    for record in fetch_recent():
+        windows.append(record["symbol"], record)
+        counts[record["symbol"]] = counts.get(record["symbol"], 0) + 1
+    return counts
+
+
 # ---------------------------------------------------------------------------
 # Main Loop
 # ---------------------------------------------------------------------------
@@ -485,6 +544,22 @@ def run() -> None:
     # Initialize components
     windows = SymbolWindows(SYMBOLS, maxlen=WINDOW_SIZE)
     writer = FeatureWriter(DATABASE_URL)
+
+    # Warm-start: preload recent features so detection resumes at full
+    # strength immediately after a restart instead of after the ~20-50
+    # minute cold warm-up. Falls back silently to a cold start.
+    warm_counts = warm_start(
+        windows,
+        lambda: writer.fetch_recent_features(SYMBOLS, limit=WINDOW_SIZE),
+    )
+    if any(warm_counts.values()):
+        logger.info(
+            "[WARM-START] Preloaded rolling windows from market_features: %s",
+            warm_counts,
+        )
+    else:
+        logger.info("[WARM-START] No history available — starting with cold windows")
+
     consumer = create_consumer(KAFKA_BOOTSTRAP_SERVERS, KAFKA_TOPIC, CONSUMER_GROUP)
 
     message_count = 0
