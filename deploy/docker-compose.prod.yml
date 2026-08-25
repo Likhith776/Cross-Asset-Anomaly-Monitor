@@ -1,0 +1,58 @@
+# Production overlay for the hosted VPS deployment.
+# Usage: docker compose -f docker-compose.yml -f deploy/docker-compose.prod.yml up -d --build
+#
+# Adds what a long-lived host needs beyond the local dev defaults:
+#   - restart: unless-stopped on every service (kafka/postgres lacked it,
+#     so nothing came back after a reboot)
+#   - json-file log rotation (a small disk fills fast otherwise)
+#   - Caddy in front with automatic Let's Encrypt TLS
+
+services:
+  kafka:
+    restart: unless-stopped
+    logging: &logging
+      driver: json-file
+      options:
+        max-size: "10m"
+        max-file: "5"
+
+  postgres:
+    restart: unless-stopped
+    logging: *logging
+
+  producer:
+    logging: *logging
+  feature-consumer:
+    logging: *logging
+  anomaly-consumer:
+    logging: *logging
+  scheduler:
+    logging: *logging
+  fastapi:
+    logging: *logging
+  streamlit:
+    logging: *logging
+
+  caddy:
+    image: caddy:2-alpine
+    container_name: caddy
+    restart: unless-stopped
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./deploy/Caddyfile:/etc/caddy/Caddyfile:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - streamlit
+      - fastapi
+    networks:
+      - anomaly-net
+    logging: *logging
+
+volumes:
+  caddy_data:
+    name: anomaly-caddy-data
+  caddy_config:
+    name: anomaly-caddy-config

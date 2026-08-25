@@ -1,0 +1,12 @@
+# TLS termination for the hosted stack. Hostnames embed the server IP via
+# sslip.io so the deployment works with zero purchased domains; Caddy
+# obtains a real Let's Encrypt certificate for each automatically.
+# Replace both hostnames when a real domain is pointed at the VPS.
+
+monitor.{PUBLIC_IP}.sslip.io {
+	reverse_proxy streamlit:8501
+}
+
+api-monitor.{PUBLIC_IP}.sslip.io {
+	reverse_proxy fastapi:8000
+}
