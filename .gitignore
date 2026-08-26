@@ -20,3 +20,6 @@ Thumbs.db
 .backtest_cache/
 backtest_output.txt
 backtest_report.json
+
+# Slim-profile backups
+backups/
