@@ -1,0 +1,197 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Cross-Asset Anomaly Monitor</title>
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js"></script>
+<style>
+  :root {
+    --bg: #0b0f14; --panel: #121821; --panel2: #0e141c;
+    --text: #e6edf3; --muted: #8b98a5; --line: #1d2630;
+    --accent: #58a6ff; --green: #4ade80; --amber: #fbbf24;
+    --orange: #fb923c; --red: #f87171;
+  }
+  * { box-sizing: border-box; margin: 0; padding: 0; }
+  body {
+    background: var(--bg); color: var(--text);
+    font-family: "Segoe UI", system-ui, -apple-system, sans-serif;
+    min-height: 100vh;
+  }
+  header {
+    display: flex; flex-wrap: wrap; align-items: baseline; gap: 12px;
+    padding: 20px 28px 12px; border-bottom: 1px solid var(--line);
+  }
+  header h1 { font-size: 20px; font-weight: 650; letter-spacing: .2px; }
+  header h1 span { color: var(--accent); }
+  #updated { color: var(--muted); font-size: 13px; }
+  main { max-width: 1180px; margin: 0 auto; padding: 22px 28px 60px; }
+  section { margin-bottom: 26px; }
+  h2 {
+    font-size: 13px; text-transform: uppercase; letter-spacing: 1.2px;
+    color: var(--muted); margin-bottom: 12px; font-weight: 600;
+  }
+  #cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; }
+  .card {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 10px; padding: 14px 16px;
+  }
+  .card .sym { font-size: 13px; color: var(--muted); font-weight: 600; }
+  .card .price { font-size: 24px; font-weight: 700; margin: 4px 0 2px; }
+  .card .meta { font-size: 12px; color: var(--muted); display: flex; gap: 10px; align-items: center; }
+  .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
+  .live { background: var(--green); } .delayed { background: var(--amber); } .stale { background: var(--red); }
+  .pos { color: var(--green); } .neg { color: var(--red); }
+  #chart { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; height: 420px; padding: 8px; }
+  #symbols { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  #symbols button {
+    background: var(--panel2); color: var(--text); border: 1px solid var(--line);
+    padding: 6px 14px; border-radius: 999px; cursor: pointer; font-size: 13px;
+  }
+  #symbols button.active { border-color: var(--accent); color: var(--accent); }
+  table { width: 100%; border-collapse: collapse; background: var(--panel); border-radius: 10px; overflow: hidden; }
+  th, td { text-align: left; padding: 10px 14px; font-size: 13px; border-bottom: 1px solid var(--line); }
+  th { color: var(--muted); text-transform: uppercase; font-size: 11px; letter-spacing: .8px; }
+  tr:last-child td { border-bottom: none; }
+  .sev-critical { color: var(--red); font-weight: 700; }
+  .sev-high { color: var(--orange); font-weight: 600; }
+  .sev-medium { color: var(--amber); } .sev-low { color: var(--green); }
+  footer { text-align: center; color: var(--muted); font-size: 12px; padding: 30px 0 16px; }
+  footer a { color: var(--accent); text-decoration: none; }
+</style>
+</head>
+<body>
+<header>
+  <h1>Cross-Asset <span>Anomaly Monitor</span></h1>
+  <div id="updated">loading…</div>
+</header>
+<main>
+  <section>
+    <h2>Asset status</h2>
+    <div id="cards"></div>
+  </section>
+  <section>
+    <h2>Price history &amp; anomalies</h2>
+    <div id="symbols"></div>
+    <div id="chart"></div>
+  </section>
+  <section>
+    <h2>Recent anomaly events</h2>
+    <table id="alerts">
+      <thead><tr><th>Time (UTC)</th><th>Symbol</th><th>Score</th><th>Detail</th></tr></thead>
+      <tbody></tbody>
+    </table>
+  </section>
+</main>
+<footer>
+  Fully autonomous: fetched, detected and published by scheduled CI —
+  no server, no downtime. <a href="https://github.com/Likhith776/Cross-Asset-Anomaly-Monitor">source ↗</a>
+</footer>
+<script>
+const SEV = s => `<span class="sev-${s}">${s}</span>`;
+const fmt = (v, d=2) => v == null ? "—" : Number(v).toLocaleString("en-US", {minimumFractionDigits: d, maximumFractionDigits: d});
+const age = s => {
+  if (s < 120) return ["live", "live"];
+  if (s < 900) return ["delayed", Math.round(s/60) + "m old"];
+  return ["stale", Math.round(s/3600) + "h old"];
+};
+
+async function j(url) { const r = await fetch(url); return r.json(); }
+
+function severityFrom(description) {
+  const m = /— (\w+) severity/.exec(description || "");
+  return m ? m[1] : "low";
+}
+
+async function loadCards() {
+  const data = await j("data/latest.json");
+  document.getElementById("updated").textContent =
+    "last updated " + new Date(data.generated_at).toUTCString().replace("GMT", "UTC");
+  const cards = document.getElementById("cards");
+  cards.innerHTML = "";
+  for (const [sym, q] of Object.entries(data.symbols)) {
+    const [cls, label] = age(q.age_seconds);
+    const r1 = q.return_1m == null ? "" :
+      `<span class="${q.return_1m >= 0 ? "pos" : "neg"}">${(q.return_1m*100).toFixed(2)}% 1m</span>`;
+    cards.insertAdjacentHTML("beforeend", `
+      <div class="card">
+        <div class="sym">${sym}</div>
+        <div class="price">${fmt(q.price, q.price > 1000 ? 0 : 2)}</div>
+        <div class="meta"><span class="dot ${cls}"></span>${label} ${r1}</div>
+      </div>`);
+  }
+}
+
+let chart = null;
+async function loadChart(sym) {
+  const data = await j(`data/charts/${sym}.json`);
+  document.querySelectorAll("#symbols button").forEach(b =>
+    b.classList.toggle("active", b.dataset.sym === sym));
+  chart = chart || echarts.init(document.getElementById("chart"), null, {renderer: "canvas"});
+  const marks = (await j("data/anomalies.json")).events
+    .filter(e => e.symbol === sym)
+    .map(e => {
+      const i = nearestIndex(data.points, e.timestamp);
+      return i == null ? null : {coord: data.points[i], value: e.score.toFixed(2)};
+    })
+    .filter(Boolean);
+  chart.setOption({
+    backgroundColor: "transparent",
+    tooltip: {trigger: "axis"},
+    grid: {left: 60, right: 20, top: 20, bottom: 40},
+    xAxis: {type: "time"},
+    yAxis: {type: "value", scale: true, axisLabel: {formatter: v => fmt(v, v > 1000 ? 0 : 2)}},
+    series: [{
+      name: sym, type: "line", showSymbol: false, smooth: false,
+      lineStyle: {color: "#58a6ff", width: 1.6},
+      areaStyle: {color: "rgba(88,166,255,.08)"},
+      data: data.points,
+      markPoint: {symbolSize: 42, itemStyle: {color: "rgba(248,113,113,.85)"},
+                  label: {fontSize: 10, formatter: p => p.value},
+                  data: marks}
+    }]
+  }, {notMerge: true});
+}
+
+function nearestIndex(points, iso) {
+  const t = new Date(iso).getTime();
+  let best = null, bestDiff = Infinity;
+  for (let i = 0; i < points.length; i++) {
+    const diff = Math.abs(new Date(points[i][0]).getTime() - t);
+    if (diff < bestDiff) { bestDiff = diff; best = i; }
+  }
+  return bestDiff < 45 * 60 * 1000 ? best : null;  // within one run interval
+}
+
+async function loadAlerts() {
+  const data = await j("data/anomalies.json");
+  const tbody = document.querySelector("#alerts tbody");
+  tbody.innerHTML = data.events.slice(0, 50).map(e => `
+    <tr>
+      <td>${new Date(e.timestamp).toISOString().replace("T", " ").slice(0, 19)}</td>
+      <td>${e.symbol}</td>
+      <td>${fmt(e.score, 3)}</td>
+      <td>${severityFrom(e.description)} — ${e.description || ""}</td>
+    </tr>`).join("") ||
+    `<tr><td colspan="4" style="color:var(--muted)">No anomalies recorded yet.</td></tr>`;
+}
+
+async function init() {
+  const latest = await j("data/latest.json");
+  const syms = Object.keys(latest.symbols);
+  const bar = document.getElementById("symbols");
+  syms.forEach((s) => {
+    const b = document.createElement("button");
+    b.textContent = s;
+    b.dataset.file = s.replace("^", "idx_").replace("=", "_");  // mirrors publisher
+    b.onclick = () => loadChart(b.dataset.file);
+    bar.appendChild(b);
+  });
+  await Promise.all([loadCards(), loadAlerts()]);
+  if (syms.length) loadChart(bar.firstChild.dataset.file);
+  setInterval(() => location.reload(), 300000);  // refresh every 5 min
+}
+init();
+</script>
+</body>
+</html>

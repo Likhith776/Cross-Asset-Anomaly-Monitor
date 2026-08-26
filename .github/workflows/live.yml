@@ -1,0 +1,67 @@
+name: LIVE
+
+# Runs the full pipeline on GitHub's hardware — no server, no database.
+# Every run: fetch quotes -> detect -> publish dashboard artifacts, then
+# force-push the result as a single commit on the `live-data` branch,
+# which GitHub Pages serves. History never grows: one amend per run.
+
+on:
+  schedule:
+    - cron: "*/30 * * * *"
+  workflow_dispatch:
+  push:
+    branches: [main]
+
+permissions:
+  contents: write
+
+concurrency:
+  group: live-site
+  cancel-in-progress: false
+
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Check out previous live state (if any)
+        uses: actions/checkout@v4
+        continue-on-error: true
+        with:
+          ref: live-data
+          path: state
+          fetch-depth: 1
+
+      - name: Run pipeline and build site artifacts
+        run: |
+          python scripts/publish_live_site.py \
+            --state-dir state \
+            --output build
+
+      - name: Publish to live-data branch (single amended commit)
+        run: |
+          set -euo pipefail
+          git config user.name "live-publisher"
+          git config user.email "actions@users.noreply.github.com"
+          if git ls-remote --exit-code --heads origin live-data >/dev/null 2>&1; then
+            git fetch origin live-data --depth 1
+            git worktree add publish-repo origin/live-data
+          else
+            git worktree add --orphan -b live-data publish-repo
+          fi
+          find publish-repo -mindepth 1 -maxdepth 1 ! -name .git -exec rm -rf {} +
+          cp -r build/. publish-repo/
+          cd publish-repo
+          git add -A
+          git commit --amend -m "live snapshot $(date -u '+%Y-%m-%d %H:%M UTC')" || true
+          git push --force origin live-data

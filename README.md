@@ -224,9 +224,29 @@ docker exec scheduler pg_restore --clean --if-exists --no-owner \
 
 The demo database is regenerable from the seeder and is not backed up.
 
-## Deployment (hosted)
+## Live deployment (GitHub Actions + Pages) — zero infrastructure
 
-**Recommended: containerless, self-hosted.** The slim profile needs only
+The hosted instance runs entirely on GitHub: a scheduled workflow
+executes the detection pipeline on GitHub's runners and publishes the
+dashboard + data snapshots to the `live-data` branch, served by GitHub
+Pages. No server, no database, no card, and no dependence on any
+personal machine being on.
+
+- **Live URL**: `https://likhith776.github.io/cross-asset-anomaly-monitor/`
+- **Cadence**: every 30 minutes (`LIVE` workflow; also runs on every push)
+- **Data contract**: [`docs/DATA_CONTRACT.md`](docs/DATA_CONTRACT.md) —
+  the JSON schemas the dashboard (and the upcoming UI revamp) consume
+
+One-time enablement: Settings → Pages → Source *Deploy from a branch* →
+`live-data` / `(root)`.
+
+Detection state persists between runs inside the published tree
+(`state/`), so each run warm-starts from the previous one — identical
+behavior to the DB-backed profiles.
+
+## Deployment (hosted VPS, alternative)
+
+**Slim profile, self-hosted.** The slim profile needs only
 Python, Postgres, and ~1 GB of RAM — no containers, no cloud account,
 no card anywhere:
 

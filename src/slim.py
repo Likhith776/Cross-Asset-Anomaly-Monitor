@@ -93,19 +93,27 @@ class SlimApp:
     production objects and warm-starts from market_features.
     """
 
-    def __init__(self, symbols=None):
+    def __init__(
+        self,
+        symbols=None,
+        *,
+        provider=None,
+        writer=None,
+        pipeline=None,
+        windows=None,
+    ):
         self.symbols = symbols or SYMBOLS
         self.stop_event = threading.Event()
         self.message_count = 0
 
         database_url = os.getenv("DATABASE_URL", "")
-        if not database_url:
+        if database_url == "" and writer is None:
             raise SystemExit("DATABASE_URL is required (e.g. in .env)")
 
-        self.provider = MarketDataProvider(self.symbols)
-        self.windows = SymbolWindows(self.symbols, maxlen=WINDOW_SIZE)
-        self.writer = FeatureWriter(database_url)
-        self.pipeline = DetectionPipeline()
+        self.provider = provider or MarketDataProvider(self.symbols)
+        self.windows = windows or SymbolWindows(self.symbols, maxlen=WINDOW_SIZE)
+        self.writer = writer or FeatureWriter(database_url)
+        self.pipeline = pipeline or DetectionPipeline()
 
         # Warm-start the feature windows AND every detector from DB
         # history so detection is fully active on the first tick.
