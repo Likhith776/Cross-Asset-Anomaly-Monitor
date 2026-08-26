@@ -63,5 +63,11 @@ jobs:
           cp -r build/. publish-repo/
           cd publish-repo
           git add -A
-          git commit --amend -m "live snapshot $(date -u '+%Y-%m-%d %H:%M UTC')" || true
+          if git rev-parse -q --verify HEAD >/dev/null; then
+            # Existing snapshot: amend so the branch stays one commit.
+            git commit --amend -m "live snapshot $(date -u '+%Y-%m-%d %H:%M UTC')"
+          else
+            # First ever publication on this branch.
+            git commit -m "live snapshot $(date -u '+%Y-%m-%d %H:%M UTC')"
+          fi
           git push --force origin live-data
