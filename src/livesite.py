@@ -282,7 +282,23 @@ def publish(state_dir: str, out_dir: str, symbols=None, provider=None,
         format="%(asctime)s | %(levelname)-8s | %(name)s | %(message)s",
         datefmt="%Y-%m-%d %H:%M:%S",
     )
-    site = LiveSite(symbols or None, provider, state_dir, out_dir)
+    if provider is None and os.getenv("LIVE_PROVIDER", "composite") == "composite":
+        # GitHub runners are blocked by Yahoo's anti-bot walls, so the
+        # hosted profile layers keyless Binance (crypto) over a retried
+        # yfinance pass for everything else. Missing coverage is visible
+        # on the dashboard as stale/delayed badges rather than hidden.
+        from src.producers.binance_provider import BinanceProvider
+        from src.producers.composite_provider import CompositeProvider
+
+        resolved = symbols or SYMBOLS
+        provider = CompositeProvider(
+            primaries=[BinanceProvider(resolved)],
+            secondary=MarketDataProvider(resolved),
+            attempts=int(os.getenv("LIVE_SECONDARY_ATTEMPTS", "2")),
+            retry_wait=int(os.getenv("LIVE_SECONDARY_WAIT", "20")),
+        )
+        symbols = resolved
+    site = LiveSite(symbols, provider, state_dir, out_dir)
     for _ in range(cycles):
         site.run_cycle()
     site.save_state()
