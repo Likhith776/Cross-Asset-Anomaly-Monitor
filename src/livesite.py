@@ -111,19 +111,34 @@ class LiveSite:
         except (OSError, ValueError):
             anomalies = []
 
-        # First-ever run on this branch has no carried-over history.
-        # Seed it with a one-time yfinance fetch (~30 s, ~150 KB) so the
-        # dashboard and detectors are immediately useful instead of
-        # starving for a cycle.
-        if not features and not os.environ.get("SKIP_HISTORICAL_SEED"):
+        # Reseed whenever the carried-over state is too small to draw
+        # a chart from — once a branch has at least 100 rows, the
+        # accumulating ticks take over. On the first-ever branch run
+        # this is also true (state was empty/just a probe). Logs are
+        # verbose by design: a silent fail here is what kept the
+        # dashboard empty for the first few LIVE cycles.
+        if (
+            len(features) < 100
+            and not os.environ.get("SKIP_HISTORICAL_SEED")
+        ):
             from src.livesite_seed import seed_history
 
+            logger.info(
+                "[LIVE] carried state has %d rows (< 100); running historical seed",
+                len(features),
+            )
             seed_rows = seed_history(self.symbols, periods=180, interval="1h")
             if seed_rows:
                 features = seed_rows
                 logger.info(
                     "[LIVE] historical seed wrote %d rows; warm-start from full data",
                     len(seed_rows),
+                )
+            else:
+                logger.warning(
+                    "[LIVE] historical seed returned 0 rows; "
+                    "continuing with carried-over state (%d rows)",
+                    len(features),
                 )
         logger.info(
             "[LIVE] loaded %d historical ticks, %d past anomalies",
