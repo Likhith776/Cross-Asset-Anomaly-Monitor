@@ -110,6 +110,21 @@ class LiveSite:
                 anomalies = json.load(fh).get("events", [])
         except (OSError, ValueError):
             anomalies = []
+
+        # First-ever run on this branch has no carried-over history.
+        # Seed it with a one-time yfinance fetch (~30 s, ~150 KB) so the
+        # dashboard and detectors are immediately useful instead of
+        # starving for a cycle.
+        if not features and not os.environ.get("SKIP_HISTORICAL_SEED"):
+            from src.livesite_seed import seed_history
+
+            seed_rows = seed_history(self.symbols, periods=180, interval="1h")
+            if seed_rows:
+                features = seed_rows
+                logger.info(
+                    "[LIVE] historical seed wrote %d rows; warm-start from full data",
+                    len(seed_rows),
+                )
         logger.info(
             "[LIVE] loaded %d historical ticks, %d past anomalies",
             len(features), len(anomalies),
@@ -288,13 +303,20 @@ def publish(state_dir: str, out_dir: str, symbols=None, provider=None,
         # profile layers keyless Coinbase (US exchange, no geo-block) over
         # a retried yfinance pass for everything else. Coverage gaps are
         # visible on the dashboard as stale/delayed badges, not hidden.
+        # Keyless primaries first: Coinbase for crypto (US exchange, no
+        # geo-block), OpenExchangeRates for daily FX. Retried yfinance
+        # then fills any remaining symbol when it isn't being throttled.
         from src.producers.coinbase_provider import CoinbaseProvider
         from src.producers.composite_provider import CompositeProvider
+        from src.producers.openexchangerates_provider import OpenExchangeRatesProvider
 
         resolved = symbols or SYMBOLS
         provider = CompositeProvider(
             symbols=resolved,
-            primaries=[CoinbaseProvider(resolved)],
+            primaries=[
+                CoinbaseProvider(resolved),
+                OpenExchangeRatesProvider(resolved),
+            ],
             secondary=MarketDataProvider(resolved),
             attempts=int(os.getenv("LIVE_SECONDARY_ATTEMPTS", "2")),
             retry_wait=int(os.getenv("LIVE_SECONDARY_WAIT", "20")),
