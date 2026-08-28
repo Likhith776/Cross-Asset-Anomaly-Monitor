@@ -55,7 +55,7 @@ jobs:
           git config user.email "actions@users.noreply.github.com"
           if git ls-remote --exit-code --heads origin live-data >/dev/null 2>&1; then
             git fetch origin live-data --depth 1
-            git worktree add publish-repo origin/live-data
+            git worktree add -b live-data publish-repo origin/live-data
           else
             git worktree add --orphan -b live-data publish-repo
           fi

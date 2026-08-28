@@ -11,6 +11,7 @@ Output contract matches the other providers: dicts with
 """
 
 import logging
+from datetime import datetime, timezone
 from typing import Any
 
 import requests
@@ -62,6 +63,3 @@ class CoinbaseProvider:
                 "timestamp": now_iso,
             })
         return quotes
-
-
-from datetime import datetime, timezone  # noqa: E402  (used in fetch_all)
