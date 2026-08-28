@@ -283,16 +283,18 @@ def publish(state_dir: str, out_dir: str, symbols=None, provider=None,
         datefmt="%Y-%m-%d %H:%M:%S",
     )
     if provider is None and os.getenv("LIVE_PROVIDER", "composite") == "composite":
-        # GitHub runners are blocked by Yahoo's anti-bot walls, so the
-        # hosted profile layers keyless Binance (crypto) over a retried
-        # yfinance pass for everything else. Missing coverage is visible
-        # on the dashboard as stale/delayed badges rather than hidden.
-        from src.producers.binance_provider import BinanceProvider
+        # GitHub runners (US) are geo-blocked by Binance (HTTP 451) and
+        # silently 0-quoted by Yahoo's anti-bot walls, so the hosted
+        # profile layers keyless Coinbase (US exchange, no geo-block) over
+        # a retried yfinance pass for everything else. Coverage gaps are
+        # visible on the dashboard as stale/delayed badges, not hidden.
+        from src.producers.coinbase_provider import CoinbaseProvider
         from src.producers.composite_provider import CompositeProvider
 
         resolved = symbols or SYMBOLS
         provider = CompositeProvider(
-            primaries=[BinanceProvider(resolved)],
+            symbols=resolved,
+            primaries=[CoinbaseProvider(resolved)],
             secondary=MarketDataProvider(resolved),
             attempts=int(os.getenv("LIVE_SECONDARY_ATTEMPTS", "2")),
             retry_wait=int(os.getenv("LIVE_SECONDARY_WAIT", "20")),

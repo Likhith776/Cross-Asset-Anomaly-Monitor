@@ -23,7 +23,9 @@ class CompositeProvider:
     retry_wait: seconds between secondary attempts.
     """
 
-    def __init__(self, primaries, secondary, attempts: int = 2, retry_wait: int = 20):
+    def __init__(self, symbols, primaries, secondary,
+                 attempts: int = 2, retry_wait: int = 20):
+        self._symbols = list(symbols)
         self.primaries = list(primaries)
         self.secondary = secondary
         self.attempts = max(1, attempts)
@@ -31,6 +33,7 @@ class CompositeProvider:
 
     def fetch_all(self) -> list[dict]:
         by_symbol: dict[str, dict] = {}
+        wanted = set(self._symbols)
 
         for primary in self.primaries:
             try:
@@ -41,15 +44,9 @@ class CompositeProvider:
                     "[COMPOSITE] primary %s failed", type(primary).__name__
                 )
 
-        wanted = set(self.secondary.symbols) if hasattr(self.secondary, "symbols") else None
-
         for attempt in range(1, self.attempts + 1):
-            missing = (
-                wanted - set(by_symbol)
-                if wanted is not None
-                else None
-            )
-            if wanted is not None and not missing:
+            missing = wanted - set(by_symbol)
+            if not missing:
                 break
             try:
                 for quote in self.secondary.fetch_all():
@@ -57,20 +54,19 @@ class CompositeProvider:
             except Exception:
                 logger.exception("[COMPOSITE] secondary failed")
 
-            if wanted is not None and not (wanted - set(by_symbol)):
+            still_missing = wanted - set(by_symbol)
+            if not still_missing:
                 break
             if attempt < self.attempts:
                 logger.info(
-                    "[COMPOSITE] %d symbols still missing after attempt %d — retrying",
-                    len((wanted - set(by_symbol))) if wanted else 0,
-                    attempt,
+                    "[COMPOSITE] %d symbols still missing after attempt %d: %s",
+                    len(still_missing), attempt, ", ".join(sorted(still_missing)),
                 )
                 time.sleep(self.retry_wait)
 
-        covered = sorted(set(by_symbol) & (wanted or set()))
-        if wanted:
-            logger.info(
-                "[COMPOSITE] coverage: %d/%d symbols (%s)",
-                len(covered), len(wanted), ", ".join(covered),
-            )
+        covered = sorted(set(by_symbol) & wanted)
+        logger.info(
+            "[COMPOSITE] coverage: %d/%d symbols (%s)",
+            len(covered), len(wanted), ", ".join(covered),
+        )
         return list(by_symbol.values())
