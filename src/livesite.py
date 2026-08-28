@@ -134,6 +134,11 @@ class LiveSite:
         except (OSError, ValueError):
             anomalies = []
 
+        # Older versions of the seeder wrote rows without return_1m,
+        # which the windows need for compute_correlations. Patch
+        # adjacent returns in place before any window sees the data.
+        features = self._enrich_returns(features)
+
         # Reseed whenever the carried-over state is too small to draw
         # a chart from — once a branch has at least 100 rows, the
         # accumulating ticks take over. On the first-ever branch run
@@ -152,10 +157,10 @@ class LiveSite:
             )
             seed_rows = seed_history(self.symbols, periods=180, interval="1h")
             if seed_rows:
-                features = seed_rows
+                features = self._enrich_returns(seed_rows)
                 logger.info(
                     "[LIVE] historical seed wrote %d rows; warm-start from full data",
-                    len(seed_rows),
+                    len(features),
                 )
             else:
                 logger.warning(
@@ -168,6 +173,31 @@ class LiveSite:
             len(features), len(anomalies),
         )
         return features, anomalies
+
+    @staticmethod
+    def _enrich_returns(features: list[dict]) -> list[dict]:
+        """Compute return_1m from adjacent prices for any row that lacks it.
+
+        Older published states were written before the seeder enriched
+        return fields; downstream code (compute_correlations, the windows
+        that build features) needs them to be present.
+        """
+        if not features:
+            return features
+        by_symbol: dict[str, list[dict]] = {}
+        for row in features:
+            by_symbol.setdefault(row.get("symbol"), []).append(row)
+        enriched: list[dict] = []
+        for _, rows in by_symbol.items():
+            for i, row in enumerate(rows):
+                if row.get("return_1m") is None and i > 0:
+                    prev = rows[i - 1].get("price")
+                    cur = row.get("price")
+                    if prev and cur:
+                        row["return_1m"] = (cur - prev) / prev
+                enriched.append(row)
+        enriched.sort(key=lambda r: (r.get("symbol"), r.get("timestamp")))
+        return enriched
 
     def save_state(self):
         # Written into the artifact tree so pushing the site persists state
