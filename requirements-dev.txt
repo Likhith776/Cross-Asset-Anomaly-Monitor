@@ -12,4 +12,5 @@ pydantic
 requests
 kafka-python
 aiokafka
+yfinance==1.6.0
 pytest
