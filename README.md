@@ -98,7 +98,9 @@ crypto) through its real-time quotes, with automatic per-symbol fallback.
 ## Quickstart (slim profile, no Docker)
 
 Prerequisites: Python 3.11+, a PostgreSQL server reachable at
-`DATABASE_URL` (any local or remote install), and `pip install -r requirements.txt`.
+`DATABASE_URL` (any local or remote install), and `pip install -r requirements.txt`
+(the production-pinned file; `requirements-dev.txt` is the loose set
+used by CI for tests).
 
 ```bash
 # 1. Configure — DATABASE_URL is the only required value
@@ -253,7 +255,7 @@ no card anywhere:
 ```bash
 git clone <repo> && cd cross-asset-anomaly-detection
 python -m venv .venv && source .venv/bin/activate   # Windows: .venv\Scripts\activate
-pip install -r requirements.txt
+pip install -r requirements.txt                    # production-pinned
 cp .env.example .env                                # set DATABASE_URL (+ strong password)
 python scripts/init_db.py                           # first run only
 python -m src.slim                                  # terminal 1

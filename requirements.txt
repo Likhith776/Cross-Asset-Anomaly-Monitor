@@ -1,0 +1,23 @@
+# Production dependencies for the slim profile (python -m src.slim).
+#
+# This is the union of everything src/slim.py imports in a production
+# deployment — fetch loop, feature computation, DetectionPipeline, API,
+# file-backed livesite, historical seeder. Kafka producers/consumers
+# (kafka-python, aiokafka) are NOT included: the slim profile replaces
+# the Kafka path with a fetch-loop-in-process design.
+#
+# Pin set is the most-conservative version that appears across the
+# per-service files (src/api, src/consumers, src/detection, src/producers)
+# — those are the source of truth for version compatibility.
+numpy==1.26.2
+pandas==2.1.4
+scikit-learn==1.3.2
+psycopg2-binary==2.9.9
+python-dotenv==1.0.0
+fastapi==0.104.1
+uvicorn[standard]==0.24.0
+sqlalchemy[asyncio]==2.0.23
+asyncpg==0.29.0
+pydantic==2.5.2
+requests==2.31.0
+yfinance==1.6.0
