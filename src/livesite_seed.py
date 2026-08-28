@@ -126,6 +126,25 @@ def seed_history(symbols, periods: int = 180, interval: str = "1h") -> list[dict
                 logger.error("[SEED] yfinance align: %s", e)
 
     rows.sort(key=lambda r: (r["symbol"], r["timestamp"]))
+
+    # Compute return_1m from adjacent seeded prices so the live windows
+    # are immediately useful for detectors and compute_correlations
+    # (which derive returns from the recorded return_1m field).
+    by_symbol: dict[str, list[dict]] = {}
+    for row in rows:
+        by_symbol.setdefault(row["symbol"], []).append(row)
+    enriched: list[dict] = []
+    for sym, srows in by_symbol.items():
+        for i, row in enumerate(srows):
+            if i > 0 and srows[i - 1]["price"] and row["price"]:
+                row["return_1m"] = (
+                    (row["price"] - srows[i - 1]["price"])
+                    / srows[i - 1]["price"]
+                )
+            enriched.append(row)
+    enriched.sort(key=lambda r: (r["symbol"], r["timestamp"]))
+    rows = enriched
+
     if rows:
         per_sym = {s: sum(1 for r in rows if r["symbol"] == s) for s in symbols}
         logger.info(

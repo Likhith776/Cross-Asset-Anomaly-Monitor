@@ -26,11 +26,13 @@
   header h1 span { color: var(--accent); }
   #updated { color: var(--muted); font-size: 13px; }
   main { max-width: 1180px; margin: 0 auto; padding: 22px 28px 60px; }
-  section { margin-bottom: 26px; }
+  section { margin-bottom: 32px; }
   h2 {
     font-size: 13px; text-transform: uppercase; letter-spacing: 1.2px;
     color: var(--muted); margin-bottom: 12px; font-weight: 600;
   }
+
+  /* Asset cards */
   #cards { display: grid; grid-template-columns: repeat(auto-fill, minmax(210px, 1fr)); gap: 12px; }
   .card {
     background: var(--panel); border: 1px solid var(--line);
@@ -38,17 +40,43 @@
   }
   .card .sym { font-size: 13px; color: var(--muted); font-weight: 600; }
   .card .price { font-size: 24px; font-weight: 700; margin: 4px 0 2px; }
-  .card .meta { font-size: 12px; color: var(--muted); display: flex; gap: 10px; align-items: center; }
+  .card .meta { font-size: 12px; color: var(--muted); display: flex; gap: 10px; align-items: center; flex-wrap: wrap; }
   .dot { width: 8px; height: 8px; border-radius: 50%; display: inline-block; }
   .live { background: var(--green); } .delayed { background: var(--amber); } .stale { background: var(--red); }
   .pos { color: var(--green); } .neg { color: var(--red); }
-  #chart { background: var(--panel); border: 1px solid var(--line); border-radius: 10px; height: 420px; padding: 8px; }
-  #symbols { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
-  #symbols button {
-    background: var(--panel2); color: var(--text); border: 1px solid var(--line);
-    padding: 6px 14px; border-radius: 999px; cursor: pointer; font-size: 13px;
+
+  /* Charts */
+  .panel {
+    background: var(--panel); border: 1px solid var(--line);
+    border-radius: 10px; padding: 12px;
   }
-  #symbols button.active { border-color: var(--accent); color: var(--accent); }
+  #price-chart { height: 360px; }
+  #timeline-chart { height: 320px; }
+  #corr-heatmap { height: 460px; }
+  #symbol-bar { display: flex; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; }
+  #symbol-bar button, .filter-btn {
+    background: var(--panel2); color: var(--text); border: 1px solid var(--line);
+    padding: 6px 14px; border-radius: 999px; cursor: pointer; font-size: 12px;
+    font-family: inherit; transition: border-color 0.15s, color 0.15s;
+  }
+  #symbol-bar button.active, .filter-btn.active {
+    border-color: var(--accent); color: var(--accent);
+  }
+
+  /* Filters bar */
+  .filters {
+    display: flex; flex-wrap: wrap; gap: 16px; align-items: center;
+    margin-bottom: 12px; padding: 10px 12px;
+    background: var(--panel2); border-radius: 8px;
+  }
+  .filters label {
+    color: var(--muted); font-size: 12px; text-transform: uppercase;
+    letter-spacing: 0.6px; display: flex; align-items: center; gap: 8px;
+  }
+  .filters input[type=range] { width: 140px; }
+  .filters .pct { color: var(--text); font-variant-numeric: tabular-nums; }
+
+  /* Tables */
   table { width: 100%; border-collapse: collapse; background: var(--panel); border-radius: 10px; overflow: hidden; }
   th, td { text-align: left; padding: 10px 14px; font-size: 13px; border-bottom: 1px solid var(--line); }
   th { color: var(--muted); text-transform: uppercase; font-size: 11px; letter-spacing: .8px; }
@@ -56,6 +84,8 @@
   .sev-critical { color: var(--red); font-weight: 700; }
   .sev-high { color: var(--orange); font-weight: 600; }
   .sev-medium { color: var(--amber); } .sev-low { color: var(--green); }
+  .empty { padding: 18px; text-align: center; color: var(--muted); }
+
   footer { text-align: center; color: var(--muted); font-size: 12px; padding: 30px 0 16px; }
   footer a { color: var(--accent); text-decoration: none; }
 </style>
@@ -70,15 +100,76 @@
     <h2>Asset status</h2>
     <div id="cards"></div>
   </section>
+
   <section>
-    <h2>Price history &amp; anomalies</h2>
-    <div id="symbols"></div>
-    <div id="chart"></div>
+    <h2>Price history &amp; anomaly markers</h2>
+    <div id="symbol-bar"></div>
+    <div id="price-chart" class="panel"></div>
   </section>
+
   <section>
-    <h2>Recent anomaly events</h2>
+    <h2>Cross-asset correlations</h2>
+    <div id="corr-heatmap" class="panel"></div>
+    <div id="corr-summary" class="empty" style="margin-top:8px"></div>
+  </section>
+
+  <section>
+    <h2>Anomaly timeline</h2>
+    <div class="filters">
+      <label>Window
+        <select id="t-window">
+          <option value="60">1H</option>
+          <option value="360">6H</option>
+          <option value="1440" selected>24H</option>
+          <option value="10080">7D</option>
+          <option value="43200">30D</option>
+          <option value="all">All</option>
+        </select>
+      </label>
+      <label>Min severity
+        <select id="t-severity">
+          <option value="all">All</option>
+          <option value="low">Low+</option>
+          <option value="medium" selected>Medium+</option>
+          <option value="high">High+</option>
+          <option value="critical">Critical only</option>
+        </select>
+      </label>
+      <label>Min score
+        <input type="range" id="t-score" min="0" max="100" value="0" step="5">
+        <span class="pct" id="t-score-val">0.00</span>
+      </label>
+      <span id="t-count" style="margin-left:auto;color:var(--muted);font-size:12px"></span>
+    </div>
+    <div id="timeline-chart" class="panel"></div>
+  </section>
+
+  <section>
+    <h2>Recent alerts</h2>
+    <div class="filters">
+      <label>Severity
+        <select id="r-severity">
+          <option value="all">All</option>
+          <option value="low">Low+</option>
+          <option value="medium" selected>Medium+</option>
+          <option value="high">High+</option>
+          <option value="critical">Critical only</option>
+        </select>
+      </label>
+      <label>Min score
+        <input type="range" id="r-score" min="0" max="100" value="0" step="5">
+        <span class="pct" id="r-score-val">0.00</span>
+      </label>
+      <label>Sort
+        <select id="r-sort">
+          <option value="score" selected>Score (high→low)</option>
+          <option value="time">Time (newest first)</option>
+        </select>
+      </label>
+      <span id="r-count" style="margin-left:auto;color:var(--muted);font-size:12px"></span>
+    </div>
     <table id="alerts">
-      <thead><tr><th>Time (UTC)</th><th>Symbol</th><th>Score</th><th>Detail</th></tr></thead>
+      <thead><tr><th>Time (UTC)</th><th>Symbol</th><th>Severity</th><th>Score</th><th>Detail</th></tr></thead>
       <tbody></tbody>
     </table>
   </section>
@@ -88,21 +179,14 @@
   no server, no downtime. <a href="https://github.com/Likhith776/Cross-Asset-Anomaly-Monitor">source ↗</a>
 </footer>
 <script>
-const SEV = s => `<span class="sev-${s}">${s}</span>`;
+const SEV_RANK = {low: 0, medium: 1, high: 2, critical: 3};
 const fmt = (v, d=2) => v == null ? "—" : Number(v).toLocaleString("en-US", {minimumFractionDigits: d, maximumFractionDigits: d});
-const age = s => {
-  if (s < 120) return ["live", "live"];
-  if (s < 900) return ["delayed", Math.round(s/60) + "m old"];
-  return ["stale", Math.round(s/3600) + "h old"];
-};
-
+const ageCls = s => s < 120 ? "live" : s < 900 ? "delayed" : "stale";
+const ageLbl = s => s < 120 ? "live" : s < 900 ? Math.round(s/60) + "m old" : Math.round(s/3600) + "h old";
+const sevPasses = (sev, minSev) => SEV_RANK[sev] >= SEV_RANK[minSev];
 async function j(url) { const r = await fetch(url); return r.json(); }
 
-function severityFrom(description) {
-  const m = /— (\w+) severity/.exec(description || "");
-  return m ? m[1] : "low";
-}
-
+// ----- Asset Status -----
 async function loadCards() {
   const data = await j("data/latest.json");
   document.getElementById("updated").textContent =
@@ -110,49 +194,55 @@ async function loadCards() {
   const cards = document.getElementById("cards");
   cards.innerHTML = "";
   for (const [sym, q] of Object.entries(data.symbols)) {
-    const [cls, label] = age(q.age_seconds);
     const r1 = q.return_1m == null ? "" :
       `<span class="${q.return_1m >= 0 ? "pos" : "neg"}">${(q.return_1m*100).toFixed(2)}% 1m</span>`;
     cards.insertAdjacentHTML("beforeend", `
       <div class="card">
         <div class="sym">${sym}</div>
         <div class="price">${fmt(q.price, q.price > 1000 ? 0 : 2)}</div>
-        <div class="meta"><span class="dot ${cls}"></span>${label} ${r1}</div>
+        <div class="meta">
+          <span class="dot ${ageCls(q.age_seconds)}"></span>${ageLbl(q.age_seconds)}
+          ${r1}
+          <span style="color:var(--muted)">· ${q.source}</span>
+        </div>
       </div>`);
   }
+  return data;
 }
 
-let chart = null;
-async function loadChart(sym) {
+// ----- Price history chart with anomaly markers -----
+let priceChart = null;
+async function loadPriceChart(sym) {
   const data = await j(`data/charts/${sym}.json`);
-  document.querySelectorAll("#symbols button").forEach(b =>
-    b.classList.toggle("active", b.dataset.sym === sym));
-  chart = chart || echarts.init(document.getElementById("chart"), null, {renderer: "canvas"});
-  const marks = (await j("data/anomalies.json")).events
+  document.querySelectorAll("#symbol-bar button").forEach(b =>
+    b.classList.toggle("active", b.dataset.file === sym));
+  priceChart = priceChart || echarts.init(document.getElementById("price-chart"), null, {renderer: "canvas"});
+  const all = await j("data/anomalies.json");
+  const marks = all.events
     .filter(e => e.symbol === sym)
     .map(e => {
       const i = nearestIndex(data.points, e.timestamp);
-      return i == null ? null : {coord: data.points[i], value: e.score.toFixed(2)};
+      return i == null ? null : {coord: data.points[i], value: e.severity[0].toUpperCase()};
     })
     .filter(Boolean);
-  chart.setOption({
+  const sevColor = s => ({low: "#4ade80", medium: "#fbbf24", high: "#fb923c", critical: "#f87171"}[s] || "#f87171");
+  marks.forEach(m => m.itemStyle = {color: sevColor(m.value)});
+  priceChart.setOption({
     backgroundColor: "transparent",
     tooltip: {trigger: "axis"},
     grid: {left: 60, right: 20, top: 20, bottom: 40},
     xAxis: {type: "time"},
-    yAxis: {type: "value", scale: true, axisLabel: {formatter: v => fmt(v, v > 1000 ? 0 : 2)}},
+    yAxis: {type: "value", scale: true,
+             axisLabel: {formatter: v => fmt(v, v > 1000 ? 0 : 2)}},
     series: [{
-      name: sym, type: "line", showSymbol: false, smooth: false,
+      name: sym, type: "line", showSymbol: false,
       lineStyle: {color: "#58a6ff", width: 1.6},
       areaStyle: {color: "rgba(88,166,255,.08)"},
       data: data.points,
-      markPoint: {symbolSize: 42, itemStyle: {color: "rgba(248,113,113,.85)"},
-                  label: {fontSize: 10, formatter: p => p.value},
-                  data: marks}
+      markPoint: {symbolSize: 28, data: marks}
     }]
   }, {notMerge: true});
 }
-
 function nearestIndex(points, iso) {
   const t = new Date(iso).getTime();
   let best = null, bestDiff = Infinity;
@@ -160,36 +250,169 @@ function nearestIndex(points, iso) {
     const diff = Math.abs(new Date(points[i][0]).getTime() - t);
     if (diff < bestDiff) { bestDiff = diff; best = i; }
   }
-  return bestDiff < 45 * 60 * 1000 ? best : null;  // within one run interval
+  return bestDiff < 45 * 60 * 1000 ? best : null;
 }
 
+// ----- Cross-Asset Correlation Heatmap -----
+let corrChart = null;
+async function loadCorrelation() {
+  const data = await j("data/correlations.json");
+  const syms = data.symbols;
+  // ECharts heatmap: [x, y, value]
+  const cells = [];
+  let nonempty = 0;
+  for (let i = 0; i < syms.length; i++) {
+    for (let j = 0; j < syms.length; j++) {
+      const v = data.matrix[i][j];
+      if (v != null) { cells.push([j, i, v]); nonempty++; }
+    }
+  }
+  const lastSnap = data.history && data.history.length
+    ? data.history[data.history.length - 1] : null;
+  document.getElementById("corr-summary").textContent = lastSnap
+    ? `Last snapshot: ${new Date(lastSnap.timestamp).toUTCString().replace("GMT", "UTC")} — ${nonempty - syms.length} pair(s) computed`
+    : "No correlation snapshots yet — first run will seed them.";
+
+  corrChart = corrChart || echarts.init(document.getElementById("corr-heatmap"), null, {renderer: "canvas"});
+  corrChart.setOption({
+    backgroundColor: "transparent",
+    tooltip: {
+      position: "top",
+      formatter: p => `${syms[p.value[1]]} ↔ ${syms[p.value[0]]}<br><b>${p.value[2].toFixed(3)}</b>`
+    },
+    grid: {left: 90, right: 10, top: 10, bottom: 90},
+    xAxis: {type: "category", data: syms, axisLabel: {rotate: 45, fontSize: 11},
+            splitArea: {show: true}},
+    yAxis: {type: "category", data: syms, axisLabel: {fontSize: 11},
+            splitArea: {show: true}},
+    visualMap: {min: -1, max: 1, calculable: true, orient: "horizontal",
+                left: "center", bottom: 0,
+                inRange: {color: ["#f87171", "#fbbf24", "#4ade80"]},
+                text: ["positive", "negative"]},
+    series: [{
+      name: "Pearson r",
+      type: "heatmap",
+      data: cells,
+      label: {show: true, fontSize: 9,
+              formatter: p => p.value[2] == null ? "" : p.value[2].toFixed(2)},
+      emphasis: {itemStyle: {shadowBlur: 8, shadowColor: "rgba(0,0,0,.6)"}}
+    }]
+  }, {notMerge: true});
+}
+
+// ----- Anomaly Timeline (with filters) -----
+let timelineChart = null;
+async function loadTimeline() {
+  const win = document.getElementById("t-window").value;
+  const minSev = document.getElementById("t-severity").value;
+  const minScore = parseFloat(document.getElementById("t-score").value) / 100;
+
+  const all = await j("data/anomalies.json");
+  const cutoff = win === "all" ? null : Date.now() - parseInt(win, 10) * 60 * 1000;
+  const filtered = all.events.filter(e => {
+    if (cutoff && new Date(e.timestamp).getTime() < cutoff) return false;
+    if (minSev !== "all" && !sevPasses(e.severity || "low", minSev)) return false;
+    if (e.score < minScore) return false;
+    return true;
+  });
+  document.getElementById("t-count").textContent = `${filtered.length} of ${all.events.length} events`;
+
+  timelineChart = timelineChart || echarts.init(document.getElementById("timeline-chart"), null, {renderer: "canvas"});
+  const bySeverity = {low: [], medium: [], high: [], critical: []};
+  for (const e of filtered) {
+    (bySeverity[e.severity] || bySeverity.low).push([e.timestamp, e.score, e.symbol]);
+  }
+  const series = Object.entries(bySeverity)
+    .filter(([_, pts]) => pts.length)
+    .map(([sev, pts]) => ({
+      name: sev, type: "scatter",
+      symbolSize: d => 6 + d[1] * 18,
+      data: pts,
+      itemStyle: {
+        color: {low: "#4ade80", medium: "#fbbf24", high: "#fb923c", critical: "#f87171"}[sev]
+      }
+    }));
+  timelineChart.setOption({
+    backgroundColor: "transparent",
+    tooltip: {trigger: "item",
+              formatter: p => `${p.value[2]}<br>score=${p.value[1].toFixed(3)}<br>${new Date(p.value[0]).toUTCString().replace("GMT","UTC")}`},
+    legend: {data: Object.keys(bySeverity).filter(s => bySeverity[s].length),
+             textStyle: {color: "var(--muted)"}},
+    grid: {left: 60, right: 20, top: 40, bottom: 40},
+    xAxis: {type: "time"},
+    yAxis: {type: "value", name: "score", min: 0, max: 1},
+    series
+  }, {notMerge: true});
+}
+
+// ----- Recent Alerts (filterable, sortable) -----
 async function loadAlerts() {
-  const data = await j("data/anomalies.json");
+  const minSev = document.getElementById("r-severity").value;
+  const minScore = parseFloat(document.getElementById("r-score").value) / 100;
+  const sortKey = document.getElementById("r-sort").value;
+
+  const all = await j("data/anomalies.json");
+  let filtered = all.events.filter(e => {
+    if (minSev !== "all" && !sevPasses(e.severity || "low", minSev)) return false;
+    if (e.score < minScore) return false;
+    return true;
+  });
+  if (sortKey === "score") {
+    filtered = [...filtered].sort((a, b) =>
+      SEV_RANK[b.severity] - SEV_RANK[a.severity] || b.score - a.score);
+  } else {
+    filtered = [...filtered].sort((a, b) =>
+      new Date(b.timestamp) - new Date(a.timestamp));
+  }
+  document.getElementById("r-count").textContent = `${filtered.length} of ${all.events.length} events`;
+
   const tbody = document.querySelector("#alerts tbody");
-  tbody.innerHTML = data.events.slice(0, 50).map(e => `
+  tbody.innerHTML = filtered.slice(0, 100).map(e => `
     <tr>
       <td>${new Date(e.timestamp).toISOString().replace("T", " ").slice(0, 19)}</td>
       <td>${e.symbol}</td>
+      <td><span class="sev-${e.severity || "low"}">${e.severity || "low"}</span></td>
       <td>${fmt(e.score, 3)}</td>
-      <td>${severityFrom(e.description)} — ${e.description || ""}</td>
+      <td>${e.description || ""}</td>
     </tr>`).join("") ||
-    `<tr><td colspan="4" style="color:var(--muted)">No anomalies recorded yet.</td></tr>`;
+    `<tr><td colspan="5" class="empty">No alerts match the current filters.</td></tr>`;
 }
 
+// ----- Wire-up -----
 async function init() {
+  await loadCards();
+  await loadCorrelation();
+  await loadTimeline();
+  await loadAlerts();
+
+  // Price-chart symbol bar
   const latest = await j("data/latest.json");
   const syms = Object.keys(latest.symbols);
-  const bar = document.getElementById("symbols");
-  syms.forEach((s) => {
+  const bar = document.getElementById("symbol-bar");
+  syms.forEach(s => {
     const b = document.createElement("button");
     b.textContent = s;
-    b.dataset.file = s.replace("^", "idx_").replace("=", "_");  // mirrors publisher
-    b.onclick = () => loadChart(b.dataset.file);
+    b.dataset.file = s.replace("^", "idx_").replace("=", "_");
+    b.onclick = () => loadPriceChart(b.dataset.file);
     bar.appendChild(b);
   });
-  await Promise.all([loadCards(), loadAlerts()]);
-  if (syms.length) loadChart(bar.firstChild.dataset.file);
-  setInterval(() => location.reload(), 300000);  // refresh every 5 min
+  if (syms.length) loadPriceChart(bar.firstChild.dataset.file);
+
+  // Filter bindings
+  document.getElementById("t-window").addEventListener("change", loadTimeline);
+  document.getElementById("t-severity").addEventListener("change", loadTimeline);
+  document.getElementById("t-score").addEventListener("input", e => {
+    document.getElementById("t-score-val").textContent = (e.target.value / 100).toFixed(2);
+    loadTimeline();
+  });
+  document.getElementById("r-severity").addEventListener("change", loadAlerts);
+  document.getElementById("r-score").addEventListener("input", e => {
+    document.getElementById("r-score-val").textContent = (e.target.value / 100).toFixed(2);
+    loadAlerts();
+  });
+  document.getElementById("r-sort").addEventListener("change", loadAlerts);
+
+  setInterval(() => location.reload(), 300000);
 }
 init();
 </script>

@@ -21,6 +21,7 @@ file-backed equivalents.
 import json
 import logging
 import os
+import re
 from datetime import datetime, timedelta, timezone
 
 from src.detection.anomaly_engine import SYMBOLS
@@ -58,7 +59,12 @@ class FileStore:
         return True
 
     def write_correlation_snapshot(self, timestamp, pairs) -> bool:
-        self.correlation_snapshots.append({"timestamp": timestamp.isoformat(), "pairs": pairs})
+        # Cap snapshots so the state file doesn't grow unbounded.
+        self.correlation_snapshots.append(
+            {"timestamp": timestamp.isoformat(), "pairs": pairs}
+        )
+        if len(self.correlation_snapshots) > 200:
+            self.correlation_snapshots = self.correlation_snapshots[-200:]
         return True
 
     def fetch_recent_features(self, symbols, limit):
@@ -89,6 +95,23 @@ class LiveSite:
         # Route cooldown/persistence hooks at the anomaly log instead of SQL.
         self.app._last_event = self._last_event
         self.app._persist_anomaly = self._persist_anomaly
+
+        # Seed at least one correlation snapshot on the first run so the
+        # heatmap renders something useful right away, instead of waiting
+        # for 60 live ticks to accumulate. SlimApp's __init__ has already
+        # warm-started the windows from the carried-over feature history
+        # by this point, so compute_correlations sees real data.
+        if not self.store.correlation_snapshots and self.store.features:
+            from src.consumers.feature_consumer import compute_correlations
+            pairs = compute_correlations(self.app.windows)
+            if pairs:
+                self.store.write_correlation_snapshot(
+                    datetime.now(timezone.utc), pairs
+                )
+                logger.info(
+                    "[LIVE] seeded %d correlation pairs from historical data",
+                    len(pairs),
+                )
 
     # ------------------------------------------------------------------
     # State persistence
@@ -198,6 +221,12 @@ class LiveSite:
         })
         del self.store.anomalies[ANOMALIES_CAP:]
 
+    @staticmethod
+    def _extract_severity(description: str) -> str:
+        """Pull the trailing '— <sev> severity' from a description."""
+        m = re.search(r"—\s+(\w+)\s+severity", description or "")
+        return m.group(1) if m else "low"
+
     # ------------------------------------------------------------------
     # Run one cycle and publish artifacts
     # ------------------------------------------------------------------
@@ -250,9 +279,41 @@ class LiveSite:
             os.path.join(self.out_dir, "data", "anomalies.json"),
             {"schema": SCHEMA_VERSION, "generated_at": generated_at,
              "events": [
-                 {k: e[k] for k in ("timestamp", "symbol", "score", "description")}
+                 {**{k: e[k] for k in ("timestamp", "symbol", "score", "description")},
+                  "severity": self._extract_severity(e.get("description", ""))}
                  for e in self.store.anomalies[:200]
              ]},
+        )
+
+        # Correlations: most recent snapshot as a matrix + history tail
+        # so the timeline can show correlation drift over time.
+        matrix_symbols = self.symbols
+        matrix_size = len(matrix_symbols)
+        latest_pairs: list[dict] = []
+        for snap in reversed(self.store.correlation_snapshots):
+            if snap.get("pairs"):
+                latest_pairs = snap["pairs"]
+                break
+        correlation_matrix = [[None] * matrix_size for _ in range(matrix_size)]
+        for i in range(matrix_size):
+            correlation_matrix[i][i] = 1.0
+        for sym_a, sym_b, corr in latest_pairs:
+            if sym_a in matrix_symbols and sym_b in matrix_symbols:
+                i, j = matrix_symbols.index(sym_a), matrix_symbols.index(sym_b)
+                correlation_matrix[i][j] = corr
+                correlation_matrix[j][i] = corr
+        self._write_json(
+            os.path.join(self.out_dir, "data", "correlations.json"),
+            {
+                "schema": SCHEMA_VERSION,
+                "generated_at": generated_at,
+                "symbols": list(matrix_symbols),
+                "matrix": correlation_matrix,
+                "history": [
+                    {"timestamp": s["timestamp"], "pairs": s["pairs"]}
+                    for s in self.store.correlation_snapshots[-50:]
+                ],
+            },
         )
 
         for symbol in self.symbols:

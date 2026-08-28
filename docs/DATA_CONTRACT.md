@@ -57,14 +57,42 @@ Newest-first anomaly log (capped at 200 published / 500 retained).
       "timestamp": "2026-08-26T09:59:12+00:00",
       "symbol": "BTC-USD",
       "score": 0.87,
+      "severity": "high",
       "description": "Tick-level zscore_spike (zscore_price detector), z=4.21 detected on BTC-USD at 71250.0 — high severity"
     }
   ]
 }
 ```
 
-Severity (`low|medium|high|critical`) is embedded in the description
-tail until the UI revamp promotes it to a field.
+`severity` is extracted from the description tail and promoted to a
+top-level field. The dashboard's Anomaly Timeline and Recent Alerts
+sections both filter on it.
+
+## `data/correlations.json`
+
+Pairwise Pearson correlation matrix from the most recent snapshot,
+plus a tail of recent snapshots for drift visualization.
+
+```json
+{
+  "schema": 1,
+  "generated_at": "...",
+  "symbols": ["^GSPC", "^IXIC", "BTC-USD", "GC=F", "CL=F", "EURUSD=X", "^TNX"],
+  "matrix": [
+    [1.0, 0.8868, -0.0223, 0.1701, 0.21, 0.0, 0.0],
+    [0.8868, 1.0, -0.0445, 0.1084, 0.2, 0.0, 0.0]
+    /* ... rows × symbols ... */
+  ],
+  "history": [
+    {"timestamp": "...", "pairs": [["^GSPC", "^IXIC", 0.8868], ...]}
+  ]
+}
+```
+
+`matrix[i][j]` is the correlation between `symbols[i]` and `symbols[j]`;
+`null` means the pair had insufficient returns for that window.
+`history` holds the most recent 50 snapshots and is what the
+correlation heatmap uses to track drift over time.
 
 ## `data/charts/{symbol}.json`
 
