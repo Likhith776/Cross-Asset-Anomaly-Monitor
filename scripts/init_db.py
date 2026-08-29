@@ -148,10 +148,52 @@ def create_correlation_snapshots_table(cur):
     print(f"done ({elapsed:.2f}s)")
 
 
+def create_anomaly_feedback_table(cur):
+    """Create the anomaly_feedback table.
+
+    One row per human judgment on an anomaly_events row. A given event
+    can be labeled multiple times — the most recent row wins, and the
+    rolling-precision endpoint counts each event at most once.
+    """
+    print("[CREATE] anomaly_feedback ...", end=" ", flush=True)
+    start = time.time()
+
+    cur.execute("""
+        CREATE TABLE IF NOT EXISTS anomaly_feedback (
+            id                  SERIAL          PRIMARY KEY,
+            anomaly_event_id    INTEGER         NOT NULL
+                                                REFERENCES anomaly_events(id)
+                                                ON DELETE CASCADE,
+            label               VARCHAR(20)     NOT NULL
+                                                CHECK (label IN ('confirmed', 'false_positive')),
+            noted_at            TIMESTAMPTZ     NOT NULL DEFAULT NOW(),
+            note                TEXT
+        );
+    """)
+
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_anomaly_feedback_event
+        ON anomaly_feedback (anomaly_event_id);
+    """)
+
+    cur.execute("""
+        CREATE INDEX IF NOT EXISTS idx_anomaly_feedback_noted_at
+        ON anomaly_feedback (noted_at DESC);
+    """)
+
+    elapsed = time.time() - start
+    print(f"done ({elapsed:.2f}s)")
+
+
 def grant_permissions(cur):
     """Grant necessary permissions if a non-superuser might be used."""
     print("[GRANT] Setting table permissions ...", end=" ", flush=True)
-    tables = ["market_features", "anomaly_events", "correlation_snapshots"]
+    tables = [
+        "market_features",
+        "anomaly_events",
+        "correlation_snapshots",
+        "anomaly_feedback",
+    ]
     for table in tables:
         cur.execute(sql.SQL("GRANT ALL PRIVILEGES ON TABLE {} TO postgres;").format(
             sql.Identifier(table)
@@ -165,7 +207,12 @@ def grant_permissions(cur):
 def verify_tables(cur):
     """Verify all tables exist and print row counts."""
     print("\n[VERIFY] Checking created tables:")
-    tables = ["market_features", "anomaly_events", "correlation_snapshots"]
+    tables = [
+        "market_features",
+        "anomaly_events",
+        "correlation_snapshots",
+        "anomaly_feedback",
+    ]
     all_ok = True
     for table in tables:
         cur.execute(
@@ -192,7 +239,10 @@ def print_indexes(cur):
             indexname,
             indexdef
         FROM pg_indexes
-        WHERE tablename IN ('market_features', 'anomaly_events', 'correlation_snapshots')
+        WHERE tablename IN (
+            'market_features', 'anomaly_events',
+            'correlation_snapshots', 'anomaly_feedback'
+        )
         ORDER BY tablename, indexname;
     """)
     rows = cur.fetchall()
@@ -209,6 +259,7 @@ def drop_tables_if_requested(cur):
 
     print("\n[DROP] Dropping existing tables (DROP_EXISTING=1) ...")
     tables_in_order = [
+        "anomaly_feedback",   # drops first — references anomaly_events
         "correlation_snapshots",
         "anomaly_events",
         "market_features",
@@ -236,6 +287,7 @@ def main():
         create_market_features_table(cur)
         create_anomaly_events_table(cur)
         create_correlation_snapshots_table(cur)
+        create_anomaly_feedback_table(cur)
 
         # Permissions
         #grant_permissions(cur)

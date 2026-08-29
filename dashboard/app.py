@@ -91,6 +91,39 @@ def fetch_anomalies(dataset: str = "live", limit: int = 50, min_score: float = 0
     return get_anomalies(limit=limit, min_score=min_score)
 
 
+def fetch_precision(dataset: str = "live", days: int = 30) -> dict:
+    """Rolling precision from /anomaly-precision. Returns an empty dict on
+    mock mode (mock_data has no labels)."""
+    if not BACKEND_URL:
+        return {}
+    try:
+        resp = requests.get(
+            f"{BACKEND_URL}/anomaly-precision",
+            params={"window_days": days, "dataset": dataset},
+            timeout=8,
+        )
+        resp.raise_for_status()
+        return resp.json()
+    except Exception:
+        return {}
+
+
+def post_feedback(anomaly_id: int, label: str, note: str = "") -> bool:
+    """Record a label for an anomaly_events.id. Returns True on success."""
+    if not BACKEND_URL:
+        return False
+    try:
+        resp = requests.post(
+            f"{BACKEND_URL}/anomalies/{anomaly_id}/feedback",
+            json={"label": label, "note": note or None},
+            timeout=8,
+        )
+        resp.raise_for_status()
+        return True
+    except Exception:
+        return False
+
+
 def fetch_correlations(dataset: str = "live") -> dict:
     data = _fetch("/correlations", _dataset_params(dataset))
     if data is not None:
@@ -540,6 +573,27 @@ else:
 
 st.markdown('<div class="section-header">Anomaly Timeline</div>', unsafe_allow_html=True)
 
+# Rolling-precision chip: shows overall + per-detector confirmation rate
+# from human labels. Hidden in mock mode (no labels in mock data).
+precision = fetch_precision()
+if precision and precision.get("total_labeled", 0) > 0:
+    overall = precision.get("overall_precision")
+    overall_str = f"{overall * 100:.0f}%" if overall is not None else "—"
+    total = precision["total_labeled"]
+    chips = [f"<b>Rolling precision (30d):</b> {overall_str} on {total} labels"]
+    for d in precision.get("by_detector", []):
+        if d.get("labeled"):
+            p = d["precision"]
+            chips.append(
+                f"{d['detector']}: {(p * 100):.0f}% ({d['confirmed']}/{d['labeled']})"
+            )
+    st.markdown(
+        "<div style='background:#1d2630;padding:8px 12px;border-radius:6px;"
+        "font-size:12px;color:#e6edf3;margin-bottom:8px'>"
+        + " &middot; ".join(chips) + "</div>",
+        unsafe_allow_html=True,
+    )
+
 chart_col1, chart_col2, chart_col3 = st.columns([1, 1, 3])
 with chart_col1:
     chart_symbol = st.selectbox(
@@ -682,38 +736,66 @@ else:
 st.markdown('<div class="section-header">Recent Alerts</div>', unsafe_allow_html=True)
 
 if anomalies:
-    alert_rows = []
+    # Per-row render so confirm/dismiss actions can be live buttons.
+    # Capped at 20 rows to match the prior dataframe height budget.
+    feedback_status: list[str] = []
     for a in anomalies[:20]:
-        alert_rows.append({
-            "Time": _ts_display(a.get("timestamp")),
-            "Symbol": a["symbol"],
-            "Score": a["anomaly_score"],
-            "Signals": _signals_str(
-                a.get("z_flag", False),
-                a.get("ewma_flag", False),
-                a.get("pca_flag", False),
-            ),
-            "Description": (a.get("description") or "")[:120],
-        })
-    df_alerts = pd.DataFrame(alert_rows)
+        a_id = a.get("id")
+        a_time = _ts_display(a.get("timestamp"))
+        a_sym = a["symbol"]
+        a_score = a.get("anomaly_score", 0.0)
+        a_signals = _signals_str(
+            a.get("z_flag", False),
+            a.get("ewma_flag", False),
+            a.get("pca_flag", False),
+        )
+        a_desc = (a.get("description") or "")[:120]
 
-    def _color_score_cell(val):
-        if pd.isna(val):
-            return ""
-        v = float(val)
-        if v >= 0.7:
-            return "color: #f87171; font-weight: 700"
-        if v >= 0.5:
-            return "color: #fb923c; font-weight: 600"
-        if v >= 0.3:
-            return "color: #fbbf24; font-weight: 500"
-        return "color: #4ade80"
+        row_cols = st.columns([1.4, 1.0, 0.7, 1.0, 3.0, 1.4])
+        row_cols[0].markdown(
+            f"<span style='color:var(--muted,#8b98a5);font-size:12px'>{a_time}</span>",
+            unsafe_allow_html=True,
+        )
+        row_cols[1].markdown(
+            f"<b>{a_sym}</b>",
+            unsafe_allow_html=True,
+        )
+        score_color = (
+            "#f87171" if a_score >= 0.7
+            else "#fb923c" if a_score >= 0.5
+            else "#fbbf24" if a_score >= 0.3
+            else "#4ade80"
+        )
+        row_cols[2].markdown(
+            f"<b style='color:{score_color}'>{a_score:.3f}</b>",
+            unsafe_allow_html=True,
+        )
+        row_cols[3].markdown(
+            f"<span style='font-size:12px;color:var(--muted,#8b98a5)'>{a_signals}</span>",
+            unsafe_allow_html=True,
+        )
+        row_cols[4].markdown(
+            f"<span style='font-size:12px'>{a_desc}</span>",
+            unsafe_allow_html=True,
+        )
+        if a_id is None:
+            row_cols[5].markdown("&nbsp;", unsafe_allow_html=True)
+        else:
+            btn_cols = row_cols[5].columns(2)
+            if btn_cols[0].button("✓", key=f"ok_{a_id}", help="Confirm this anomaly"):
+                if post_feedback(a_id, "confirmed"):
+                    feedback_status.append(f"confirmed #{a_id}")
+                else:
+                    feedback_status.append("API unavailable")
+            if btn_cols[1].button("✗", key=f"fp_{a_id}", help="Mark as false positive"):
+                if post_feedback(a_id, "false_positive"):
+                    feedback_status.append(f"rejected #{a_id}")
+                else:
+                    feedback_status.append("API unavailable")
 
-    styled_alerts = df_alerts.style.map(_color_score_cell, subset=["Score"])
-    styled_alerts = styled_alerts.format({"Score": "{:.3f}"})
-    styled_alerts = styled_alerts.hide(axis="index")
-
-    st.dataframe(styled_alerts, use_container_width=True, height=440)
+    if feedback_status:
+        st.success("Feedback recorded: " + ", ".join(feedback_status))
+        st.rerun()
 else:
     st.info("No anomaly alerts in the selected window.")
 

@@ -6,7 +6,7 @@ conversion from SQLAlchemy ORM objects.
 """
 
 from datetime import datetime
-from typing import Optional
+from typing import Literal, Optional
 
 from pydantic import BaseModel, Field
 
@@ -71,3 +71,49 @@ class ChartPoint(BaseModel):
     pca_residual: Optional[float] = None
     volume: Optional[int] = None
     composite_score: float = Field(0.0, ge=0.0, le=1.0)
+
+
+class AnomalyFeedbackRequest(BaseModel):
+    """Request body for POST /anomalies/{id}/feedback."""
+    label: Literal["confirmed", "false_positive"]
+    note: Optional[str] = Field(
+        None,
+        max_length=2000,
+        description="Free-text note about the judgment.",
+    )
+
+
+class AnomalyFeedbackResponse(BaseModel):
+    """Response from POST /anomalies/{id}/feedback."""
+    id: int
+    anomaly_event_id: int
+    label: str
+    noted_at: datetime
+    note: Optional[str] = None
+
+    model_config = {"from_attributes": True}
+
+
+class DetectorPrecision(BaseModel):
+    """One row of the rolling-precision breakdown."""
+    detector: str
+    labeled: int
+    confirmed: int
+    false_positive: int
+    precision: Optional[float] = Field(
+        None,
+        description="confirmed / labeled; None when labeled is 0.",
+    )
+
+
+class AnomalyPrecisionResponse(BaseModel):
+    """Response for GET /anomaly-precision."""
+    window_days: int
+    total_labeled: int
+    total_confirmed: int
+    total_false_positive: int
+    overall_precision: Optional[float] = Field(
+        None,
+        description="confirmed / labeled across all detectors; None when unlabeled.",
+    )
+    by_detector: list[DetectorPrecision]

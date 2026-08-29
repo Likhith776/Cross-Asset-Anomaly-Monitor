@@ -20,6 +20,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from src.api.database import (
     AnomalyEvent,
+    AnomalyFeedback,
     CorrelationSnapshot,
     MarketFeature,
     async_session_factory,
@@ -27,9 +28,13 @@ from src.api.database import (
 )
 from src.api.models import (
     AnomalyEventResponse,
+    AnomalyFeedbackRequest,
+    AnomalyFeedbackResponse,
+    AnomalyPrecisionResponse,
     AssetStatus,
     ChartPoint,
     CorrelationMatrix,
+    DetectorPrecision,
     HealthResponse,
     MetaResponse,
 )
@@ -382,6 +387,130 @@ async def get_anomalies_by_symbol(
         )
         for r in rows
     ]
+
+
+# ---------------------------------------------------------------------------
+# Anomaly feedback + precision
+# ---------------------------------------------------------------------------
+
+# Mapping from the live anomaly_events.description prefix to the
+# detector that fired it. The deterministic nature of the description
+# makes this robust to changes elsewhere — we just look for which
+# keyword the description contains.
+_DETECTOR_KEYWORDS: dict[str, str] = {
+    "zscore_spike": "zscore",
+    "isolation_forest_outlier": "iforest",
+    "correlation_break": "correlation",
+}
+
+
+def _detector_from_description(description: Optional[str]) -> str:
+    if not description:
+        return "unknown"
+    for keyword, label in _DETECTOR_KEYWORDS.items():
+        if keyword in description:
+            return label
+    return "unknown"
+
+
+@app.post(
+    "/anomalies/{anomaly_id}/feedback",
+    response_model=AnomalyFeedbackResponse,
+)
+async def post_anomaly_feedback(
+    anomaly_id: int,
+    payload: AnomalyFeedbackRequest,
+    session: AsyncSession = Depends(get_session),
+):
+    """
+    Record a human judgment (confirmed / false_positive) on an
+    anomaly_event. The same event can be labeled many times — the
+    rolling-precision endpoint uses the *most recent* label per event.
+    """
+    stmt = text("SELECT 1 FROM anomaly_events WHERE id = :id")
+    exists = await session.execute(stmt, {"id": anomaly_id})
+    if exists.first() is None:
+        raise HTTPException(
+            status_code=404, detail=f"anomaly_event {anomaly_id} not found"
+        )
+
+    insert = text("""
+        INSERT INTO anomaly_feedback (anomaly_event_id, label, noted_at, note)
+        VALUES (:event_id, :label, NOW(), :note)
+        RETURNING id, anomaly_event_id, label, noted_at, note
+    """)
+    row = (
+        await session.execute(
+            insert,
+            {
+                "event_id": anomaly_id,
+                "label": payload.label,
+                "note": payload.note,
+            },
+        )
+    ).mappings().one()
+    await session.commit()
+
+    return AnomalyFeedbackResponse(
+        id=row["id"],
+        anomaly_event_id=row["anomaly_event_id"],
+        label=row["label"],
+        noted_at=row["noted_at"],
+        note=row["note"],
+    )
+
+
+@app.get("/anomaly-precision", response_model=AnomalyPrecisionResponse)
+async def get_anomaly_precision(
+    days: int = Query(30, ge=1, le=365),
+    session: AsyncSession = Depends(get_session),
+):
+    """
+    Rolling-window precision: for every anomaly in the last `days`
+    days that has at least one feedback row, take the most recent
+    label. confirmed / (confirmed + false_positive) is precision; the
+    `by_detector` breakdown is computed by joining back to the
+    description string on the underlying anomaly_events row.
+    """
+    interval = f"{days} days"
+
+    # Most recent label per event, filtered to the rolling window
+    latest_per_event = text(f"""
+        WITH latest AS (
+            SELECT DISTINCT ON (anomaly_event_id)
+                anomaly_event_id, label, noted_at
+            FROM anomaly_feedback
+            ORDER BY anomaly_event_id, noted_at DESC
+        )
+        SELECT
+            ae.id            AS event_id,
+            ae.description   AS description,
+            latest.label     AS label,
+            latest.noted_at  AS noted_at
+        FROM latest
+        JOIN anomaly_events ae ON ae.id = latest.anomaly_event_id
+        WHERE latest.noted_at >= NOW() - INTERVAL '{interval}'
+    """)
+
+    rows = (await session.execute(latest_per_event)).mappings().all()
+
+    # Hand the joined rows to the same pure function the livesite
+    # publisher uses, so both surfaces return identical numbers.
+    from src.precision import compute_precision
+
+    result = compute_precision(
+        (
+            {
+                "anomaly_event_id": r["event_id"],
+                "label": r["label"],
+                "noted_at": r["noted_at"],
+                "description": r["description"],
+            }
+            for r in rows
+        ),
+        window_days=days,
+    )
+    return AnomalyPrecisionResponse(**result)
 
 
 @app.get("/meta", response_model=MetaResponse)

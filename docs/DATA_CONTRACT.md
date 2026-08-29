@@ -94,6 +94,73 @@ plus a tail of recent snapshots for drift visualization.
 `history` holds the most recent 50 snapshots and is what the
 correlation heatmap uses to track drift over time.
 
+## `data/feedback.json`, `data/precision.json`
+
+Human-in-the-loop labeling of anomalies, with the resulting real-usage
+precision metric.
+
+**Feedback** (`data/feedback.json`) — most-recent-wins per anomaly:
+
+```json
+{
+  "schema": 1,
+  "generated_at": "...",
+  "feedback": [
+    {
+      "anomaly_event_id": null,
+      "symbol": "BTC-USD",
+      "timestamp": "2026-08-26T09:59:12+00:00",
+      "label": "confirmed",
+      "noted_at": "2026-08-26T11:02:00+00:00",
+      "description": "Tick-level zscore_spike ... — high severity"
+    }
+  ]
+}
+```
+
+**Precision** (`data/precision.json`) — rolling 30-day aggregation:
+
+```json
+{
+  "schema": 1,
+  "generated_at": "...",
+  "window_days": 30,
+  "total_labeled": 12,
+  "total_confirmed": 8,
+  "total_false_positive": 4,
+  "overall_precision": 0.6667,
+  "by_detector": [
+    {"detector": "iforest", "labeled": 7, "confirmed": 5,
+     "false_positive": 2, "precision": 0.7143}
+  ]
+}
+```
+
+### Recording feedback — two surfaces, two mechanisms
+
+- **API profiles** (slim + docker-compose): `POST
+  /anomalies/{anomaly_id}/feedback` with `{"label":
+  "confirmed"|"false_positive", "note": "..."}` writes to the
+  `anomaly_feedback` Postgres table (created by `scripts/init_db.py`).
+  `GET /anomaly-precision?window_days=30` returns the same shape as
+  `precision.json`, computed from the DB.
+
+- **GitHub Pages live site**: the static dashboard renders the labels
+  and precision already baked into the JSON, but **there is no write
+  path and no user auth/session model on a static site** — any visitor
+  could forge a label, so the site deliberately does not accept
+  feedback from browsers. Labels on the live profile are recorded
+  server-side during pipeline runs (e.g. via the maintainer editing
+  `state/feedback.json`, or a future authenticated endpoint); the
+  published JSON simply reflects whatever the last run loaded. This is
+  a known limitation, accepted in exchange for zero infrastructure.
+
+Detector attribution for `by_detector` comes from the anomaly's
+description keywords (zscore_spike → `zscore`,
+isolation_forest_outlier → `iforest`, correlation_break →
+`correlation`; anything else → `unknown`), shared by both surfaces via
+`src/precision.py`.
+
 ## `data/charts/{symbol}.json`
 
 Downsampled close-price series per symbol (≤600 points, endpoints kept).

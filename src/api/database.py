@@ -13,9 +13,11 @@ from sqlalchemy import (
     Boolean,
     DateTime,
     Float,
-    Integer,
+    ForeignKey,
     Index,
+    Integer,
     String,
+    Text,
     Text,
     UniqueConstraint,
 )
@@ -126,4 +128,23 @@ class CorrelationSnapshot(Base):
             "timestamp", "symbol_a", "symbol_b",
             name="uq_corr_snapshot_pair_time",
         ),
+    )
+
+
+class AnomalyFeedback(Base):
+    __tablename__ = "anomaly_feedback"
+
+    id: Mapped[int] = mapped_column(Integer, primary_key=True)
+    anomaly_event_id: Mapped[int] = mapped_column(
+        Integer,
+        ForeignKey("anomaly_events.id", ondelete="CASCADE"),
+        nullable=False,
+    )
+    label: Mapped[str] = mapped_column(String(20), nullable=False)
+    noted_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
+    note: Mapped[Optional[str]] = mapped_column(Text)
+
+    __table_args__ = (
+        Index("idx_anomaly_feedback_event", "anomaly_event_id"),
+        Index("idx_anomaly_feedback_noted_at", "noted_at"),
     )

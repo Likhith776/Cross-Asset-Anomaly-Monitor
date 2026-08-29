@@ -45,12 +45,77 @@ class FileStore:
     Satisfies the surface SlimApp expects from FeatureWriter:
     write_feature / write_correlation_snapshot / fetch_recent_features,
     plus an append-only anomaly log used by the cooldown hooks.
+
+    Feedback is keyed by (symbol, timestamp) — the static site has no
+    real auth/session model, so feedback there is best-effort. See
+    docs/DATA_CONTRACT.md for the limitation note.
     """
 
-    def __init__(self, features=None, anomalies=None):
+    def __init__(self, features=None, anomalies=None, feedback=None):
         self.features = list(features or [])      # oldest-first per symbol
         self.anomalies = list(anomalies or [])    # newest-first
         self.correlation_snapshots = []
+        self.feedback = list(feedback or [])      # newest-first
+
+    # --- FeatureWriter-compatible surface -----------------------------
+
+    def write_feature(self, record) -> bool:
+        self.features.append(dict(record))
+        return True
+
+    def write_correlation_snapshot(self, timestamp, pairs) -> bool:
+        # Cap snapshots so the state file doesn't grow unbounded.
+        self.correlation_snapshots.append(
+            {"timestamp": timestamp.isoformat(), "pairs": pairs}
+        )
+        if len(self.correlation_snapshots) > 200:
+            self.correlation_snapshots = self.correlation_snapshots[-200:]
+        return True
+
+    def record_feedback(
+        self,
+        symbol: str,
+        timestamp: str,
+        label: str,
+        note: str | None = None,
+    ) -> dict:
+        """
+        Record a label keyed by (symbol, timestamp). The most recent
+        record wins, so calling this twice for the same pair replaces
+        the prior label. Returns the new entry.
+        """
+        entry = {
+            "symbol": symbol,
+            "timestamp": timestamp,
+            "label": label,
+            "noted_at": datetime.now(timezone.utc).isoformat(),
+            "note": note,
+        }
+        # Drop any prior label for the same (symbol, timestamp).
+        self.feedback = [
+            f for f in self.feedback
+            if not (f["symbol"] == symbol and f["timestamp"] == timestamp)
+        ]
+        self.feedback.insert(0, entry)
+        # Cap to 500 entries so the published file stays small.
+        del self.feedback[500:]
+        return entry
+
+    @staticmethod
+    def latest_label_for(entries: list[dict], symbol: str, timestamp: str):
+        for e in entries:
+            if e.get("symbol") == symbol and e.get("timestamp") == timestamp:
+                return e
+        return None
+
+    def fetch_recent_features(self, symbols, limit):
+        rows = [r for r in self.features if r.get("symbol") in set(symbols)]
+        rows.sort(key=lambda r: r["timestamp"])
+        out = []
+        for symbol in symbols:
+            per_sym = [r for r in rows if r["symbol"] == symbol][-limit:]
+            out.extend(per_sym)
+        return out
 
     # --- FeatureWriter-compatible surface -----------------------------
 
@@ -85,8 +150,8 @@ class LiveSite:
         self.out_dir = out_dir
         self.symbols = symbols or SYMBOLS
 
-        features, anomalies = self._load_state()
-        self.store = FileStore(features, anomalies)
+        features, anomalies, feedback = self._load_state()
+        self.store = FileStore(features, anomalies, feedback)
 
         self.provider = provider or MarketDataProvider(self.symbols)
         self.app = SlimApp(
@@ -118,6 +183,67 @@ class LiveSite:
     # ------------------------------------------------------------------
 
     def _load_state(self):
+        # State travels inside the published tree: <branch>/state/*.json
+        base = os.path.join(self.state_dir, "state")
+        history_path = os.path.join(base, "history.json")
+        anomalies_path = os.path.join(base, "anomalies.json")
+        feedback_path = os.path.join(base, "feedback.json")
+        try:
+            with open(history_path, encoding="utf-8") as fh:
+                features = json.load(fh).get("features", [])
+        except (OSError, ValueError):
+            features = []
+            logger.info("[LIVE] no previous feature history — cold start")
+        try:
+            with open(anomalies_path, encoding="utf-8") as fh:
+                anomalies = json.load(fh).get("events", [])
+        except (OSError, ValueError):
+            anomalies = []
+        try:
+            with open(feedback_path, encoding="utf-8") as fh:
+                feedback = json.load(fh).get("feedback", [])
+        except (OSError, ValueError):
+            feedback = []
+
+        # Older versions of the seeder wrote rows without return_1m,
+        # which the windows need for compute_correlations. Patch
+        # adjacent returns in place before any window sees the data.
+        features = self._enrich_returns(features)
+
+        # Reseed whenever the carried-over state is too small to draw
+        # a chart from — once a branch has at least 100 rows, the
+        # accumulating ticks take over. On the first-ever branch run
+        # this is also true (state was empty/just a probe). Logs are
+        # verbose by design: a silent fail here is what kept the
+        # dashboard empty for the first few LIVE cycles.
+        if (
+            len(features) < 100
+            and not os.environ.get("SKIP_HISTORICAL_SEED")
+        ):
+            from src.livesite_seed import seed_history
+
+            logger.info(
+                "[LIVE] carried state has %d rows (< 100); running historical seed",
+                len(features),
+            )
+            seed_rows = seed_history(self.symbols, periods=180, interval="1h")
+            if seed_rows:
+                features = self._enrich_returns(seed_rows)
+                logger.info(
+                    "[LIVE] historical seed wrote %d rows; warm-start from full data",
+                    len(features),
+                )
+            else:
+                logger.warning(
+                    "[LIVE] historical seed returned 0 rows; "
+                    "continuing with carried-over state (%d rows)",
+                    len(features),
+                )
+        logger.info(
+            "[LIVE] loaded %d historical ticks, %d past anomalies, %d feedback entries",
+            len(features), len(anomalies), len(feedback),
+        )
+        return features, anomalies, feedback
         # State travels inside the published tree: <branch>/state/*.json
         base = os.path.join(self.state_dir, "state")
         history_path = os.path.join(base, "history.json")
@@ -218,6 +344,10 @@ class LiveSite:
         self._write_json(
             os.path.join(base, "anomalies.json"),
             {"schema": SCHEMA_VERSION, "events": self.store.anomalies[:ANOMALIES_CAP]},
+        )
+        self._write_json(
+            os.path.join(base, "feedback.json"),
+            {"schema": SCHEMA_VERSION, "feedback": self.store.feedback[:500]},
         )
 
     @staticmethod
@@ -343,6 +473,43 @@ class LiveSite:
                     {"timestamp": s["timestamp"], "pairs": s["pairs"]}
                     for s in self.store.correlation_snapshots[-50:]
                 ],
+            },
+        )
+
+        # Feedback: most-recent-wins per (symbol, timestamp). The
+        # description that the detector attribution needs is read from
+        # the matching anomaly_events row.
+        label_to_description = {
+            (a["symbol"], a["timestamp"]): a.get("description", "")
+            for a in self.store.anomalies
+        }
+        feedback_rows: list[dict] = []
+        for entry in self.store.feedback:
+            row = {
+                "anomaly_event_id": None,
+                "symbol": entry.get("symbol"),
+                "timestamp": entry.get("timestamp"),
+                "label": entry.get("label"),
+                "noted_at": entry.get("noted_at"),
+                "description": label_to_description.get(
+                    (entry.get("symbol"), entry.get("timestamp")), ""
+                ),
+            }
+            feedback_rows.append(row)
+        self._write_json(
+            os.path.join(self.out_dir, "data", "feedback.json"),
+            {"schema": SCHEMA_VERSION, "generated_at": generated_at,
+             "feedback": feedback_rows},
+        )
+
+        from src.precision import compute_precision
+
+        self._write_json(
+            os.path.join(self.out_dir, "data", "precision.json"),
+            {
+                "schema": SCHEMA_VERSION,
+                "generated_at": generated_at,
+                **compute_precision(feedback_rows, window_days=30),
             },
         )
 
