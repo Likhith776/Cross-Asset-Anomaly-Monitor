@@ -7,7 +7,10 @@ FileStore entries). Same data shape in, same numbers out — the
 API path uses (event_id, label) pairs, the livesite path uses
 (symbol, timestamp) pairs; both eventually key on the same event.
 
-Detector attribution mirrors src/api/main.py's keyword logic.
+SINGLE SOURCE OF TRUTH for detector attribution: _DETECTOR_KEYWORDS
+and detector_from_description live here and are imported by
+src/api/main.py (and any other surface that needs them). When adding
+a detector, add its anomaly type here — nowhere else.
 """
 
 from collections import Counter, defaultdict
@@ -18,6 +21,7 @@ _DETECTOR_KEYWORDS: dict[str, str] = {
     "zscore_spike": "zscore",
     "isolation_forest_outlier": "iforest",
     "correlation_break": "correlation",
+    "joint_mahalanobis": "joint",
 }
 
 

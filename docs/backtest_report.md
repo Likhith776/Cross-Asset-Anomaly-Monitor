@@ -19,10 +19,10 @@ Alerts per 1000 evaluated symbol-ticks with no anomalies present.
 
 | detector | alerts/1000 ticks |
 |---|---|
-| zscore_spike | 30.0 |
-| isolation_forest_outlier | 100.0 |
 | correlation_break | 0.0 |
+| isolation_forest_outlier | 100.0 |
 | joint_mahalanobis | 0.0 |
+| zscore_spike | 30.0 |
 
 ## Single-symbol planted anomalies
 
@@ -30,41 +30,41 @@ Pooled over all magnitudes and seeds. Precision = matched/alerts, recall = match
 
 | detector | caught/planted | precision | recall | F1 | alerts fired |
 |---|---|---|---|---|---|
-| zscore_spike | 1/72 | 0.00 | 0.01 | 0.00 | 612 |
-| isolation_forest_outlier | 69/72 | 0.04 | 0.96 | 0.08 | 1739 |
 | correlation_break | 0/8 | 0.00 | 0.00 | — | 31 |
+| isolation_forest_outlier | 69/72 | 0.04 | 0.96 | 0.08 | 1739 |
 | joint_mahalanobis | 11/44 | 0.52 | 0.25 | 0.34 | 21 |
+| zscore_spike | 1/72 | 0.00 | 0.01 | 0.00 | 612 |
 
 ### Recall by planted magnitude (single-symbol)
 
-| magnitude (level-sigmas) | zscore_spike | isolation_forest_outlier | correlation_break | joint_mahalanobis |
+| magnitude (level-sigmas) | correlation_break | isolation_forest_outlier | joint_mahalanobis | zscore_spike |
 |---|---|---|---|---|
-| 1.0 | 0.00 | 0.83 | — | 0.25 |
-| 1.5 | 0.00 | 0.92 | — | 0.25 |
-| 2.0 | 0.00 | 1.00 | — | 0.25 |
-| 3.0 | 0.00 | 1.00 | — | 0.25 |
-| 4.0 | 0.00 | 1.00 | 0.00 | 0.25 |
-| 6.0 | 0.08 | 1.00 | 0.00 | 0.25 |
+| 1.0 | — | 0.83 | 0.25 | 0.00 |
+| 1.5 | — | 0.92 | 0.25 | 0.00 |
+| 2.0 | — | 1.00 | 0.25 | 0.00 |
+| 3.0 | — | 1.00 | 0.25 | 0.00 |
+| 4.0 | 0.00 | 1.00 | 0.25 | 0.00 |
+| 6.0 | 0.00 | 1.00 | 0.25 | 0.08 |
 
 ## Joint-flip planted anomalies (pair moves opposite)
 
 Per-asset moves are sub-threshold by construction — only the joint structure is anomalous. This isolates what `joint_mahalanobis` adds over single-asset detectors.
 
-| deviation (return-sigmas) | zscore_spike | isolation_forest_outlier | correlation_break | joint_mahalanobis |
+| deviation (return-sigmas) | correlation_break | isolation_forest_outlier | joint_mahalanobis | zscore_spike |
 |---|---|---|---|---|
-| 1.0 | 0.00 | 0.20 | — | — |
-| 1.5 | 0.00 | 0.20 | — | — |
-| 2.0 | 0.00 | 0.20 | — | 0.60 |
-| 3.0 | 0.00 | 0.20 | 0.00 | 0.60 |
+| 1.0 | — | 0.20 | — | 0.00 |
+| 1.5 | — | 0.20 | — | 0.00 |
+| 2.0 | — | 0.20 | 0.60 | 0.00 |
+| 3.0 | 0.00 | 0.20 | 0.60 | 0.00 |
 
 ## Pooled joint-flip metrics
 
 | detector | caught/planted | precision | recall | F1 | alerts fired |
 |---|---|---|---|---|---|
-| zscore_spike | 0/60 | 0.00 | 0.00 | — | 369 |
-| isolation_forest_outlier | 12/60 | 0.01 | 0.20 | 0.02 | 1155 |
 | correlation_break | 0/15 | 0.00 | 0.00 | — | 42 |
+| isolation_forest_outlier | 12/60 | 0.01 | 0.20 | 0.02 | 1155 |
 | joint_mahalanobis | 18/30 | 0.75 | 0.60 | 0.67 | 24 |
+| zscore_spike | 0/60 | 0.00 | 0.00 | — | 369 |
 
 ## Reading this report
 

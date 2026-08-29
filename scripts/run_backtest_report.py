@@ -42,6 +42,7 @@ from src.detection.cross_asset import CrossAssetCorrelationDetector  # noqa: E40
 from src.detection.isolation_forest import IsolationForestDetector  # noqa: E402
 from src.detection.joint import MultivariateJointDetector  # noqa: E402
 from src.detection.pipeline import DetectionPipeline  # noqa: E402
+from src.precision import _DETECTOR_KEYWORDS  # noqa: E402
 from src.detection.zscore import ZScoreDetector  # noqa: E402
 
 logging.basicConfig(level=logging.WARNING)
@@ -64,12 +65,9 @@ SINGLE_EVENTS_PER_TRIAL = 6
 JOINT_DEVIATIONS = [1.0, 1.5, 2.0, 3.0]                # return-sigmas, opposite
 JOINT_SEEDS = [401, 502, 603]
 
-DETECTOR_TYPES = [
-    "zscore_spike",
-    "isolation_forest_outlier",
-    "correlation_break",
-    "joint_mahalanobis",
-]
+# Derived from the shared attribution mapping so a new detector
+# automatically appears in the report (single source of truth).
+DETECTOR_TYPES = sorted(_DETECTOR_KEYWORDS.keys())
 TARGET_SYMBOL = PANEL_SYMBOLS[-1]   # joint events fire on the last column
 
 
@@ -350,11 +348,16 @@ def generate_chart(single_report, out_path) -> None:
     import matplotlib.pyplot as plt
 
     fig, ax = plt.subplots(figsize=(8, 5))
+    palette = {
+        "zscore": "#58a6ff",
+        "iforest": "#fbbf24",
+        "correlation": "#a78bfa",
+        "joint": "#f87171",
+    }
+    default = "#8b98a5"
     colors = {
-        "zscore_spike": "#58a6ff",
-        "isolation_forest_outlier": "#fbbf24",
-        "correlation_break": "#a78bfa",
-        "joint_mahalanobis": "#f87171",
+        det: palette.get(_DETECTOR_KEYWORDS.get(det, ""), default)
+        for det in DETECTOR_TYPES
     }
     for det in DETECTOR_TYPES:
         xs, ys = [], []

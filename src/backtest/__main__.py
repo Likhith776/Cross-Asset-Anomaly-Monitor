@@ -29,6 +29,7 @@ from src.backtest.data import align_panel, fetch_symbol_history
 from src.backtest.harness import replay_panel, score_trial
 from src.backtest.inject import DEFAULT_WARMUP, plant_anomalies
 from src.detection.pipeline import DetectionPipeline
+from src.precision import _DETECTOR_KEYWORDS
 from src.universe import load_universe
 
 logger = logging.getLogger("backtest")
@@ -124,8 +125,7 @@ def run_planted_trials(panel, args):
                     st["lags"].append(s["median_lag"])
                 st["n_events"] += total_events
             # Detectors silent this trial still accrue event totals:
-            for t in ("zscore_spike", "isolation_forest_outlier",
-                      "correlation_break"):
+            for t in sorted(_DETECTOR_KEYWORDS):
                 if t not in seen_types:
                     stats[t]["n_events"] += total_events
             logger.info(

@@ -38,6 +38,7 @@ from src.api.models import (
     HealthResponse,
     MetaResponse,
 )
+from src.precision import compute_precision, detector_from_description
 
 load_dotenv()
 
@@ -425,24 +426,8 @@ async def get_anomalies_by_symbol(
 # Anomaly feedback + precision
 # ---------------------------------------------------------------------------
 
-# Mapping from the live anomaly_events.description prefix to the
-# detector that fired it. The deterministic nature of the description
-# makes this robust to changes elsewhere — we just look for which
-# keyword the description contains.
-_DETECTOR_KEYWORDS: dict[str, str] = {
-    "zscore_spike": "zscore",
-    "isolation_forest_outlier": "iforest",
-    "correlation_break": "correlation",
-}
-
-
-def _detector_from_description(description: Optional[str]) -> str:
-    if not description:
-        return "unknown"
-    for keyword, label in _DETECTOR_KEYWORDS.items():
-        if keyword in description:
-            return label
-    return "unknown"
+# Detector attribution lives in src/precision.py (single source of
+# truth, shared with the livesite publisher and the report generator).
 
 
 @app.post(
@@ -528,8 +513,6 @@ async def get_anomaly_precision(
 
     # Hand the joined rows to the same pure function the livesite
     # publisher uses, so both surfaces return identical numbers.
-    from src.precision import compute_precision
-
     result = compute_precision(
         (
             {

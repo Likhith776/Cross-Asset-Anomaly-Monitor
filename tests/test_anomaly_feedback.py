@@ -41,6 +41,45 @@ def test_detector_from_description_unknown():
     assert detector_from_description("some new detector not yet keyed") == "unknown"
 
 
+def test_detector_from_description_joint():
+    """THE regression test for the original gap: the multivariate joint
+    detector's feedback was attributed to 'unknown' because the shared
+    attribution mapping lacked its anomaly type."""
+    description = (
+        "Tick-level joint_mahalanobis (joint_mahalanobis detector), "
+        "d2/dim=6.99 detected on ^GSPC — critical severity"
+    )
+    assert detector_from_description(description) == "joint"
+
+
+def test_attribution_mapping_covers_every_known_detector_type():
+    from src.precision import _DETECTOR_KEYWORDS
+
+    assert _DETECTOR_KEYWORDS == {
+        "zscore_spike": "zscore",
+        "isolation_forest_outlier": "iforest",
+        "correlation_break": "correlation",
+        "joint_mahalanobis": "joint",
+    }
+
+
+def test_compute_precision_attributes_joint_feedback_to_joint():
+    labels = [
+        _label(1, "confirmed", days_ago=1,
+               description="... joint_mahalanobis ..."),
+        _label(2, "false_positive", days_ago=1,
+               description="... joint_mahalanobis ..."),
+        _label(3, "confirmed", days_ago=1,
+               description="... zscore_spike ..."),
+    ]
+    r = compute_precision(labels, window_days=30)
+    by_det = {d["detector"]: d for d in r["by_detector"]}
+    assert "unknown" not in by_det
+    assert by_det["joint"]["labeled"] == 2
+    assert by_det["joint"]["precision"] == 0.5
+    assert by_det["zscore"]["labeled"] == 1
+
+
 # ---------------------------------------------------------------------------
 # compute_precision — the math that drives both the API endpoint and the
 # livesite publisher. These tests cover empty, simple, deduplication, and
