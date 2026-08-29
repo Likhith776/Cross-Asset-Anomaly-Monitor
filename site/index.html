@@ -76,6 +76,16 @@
   .filters input[type=range] { width: 140px; }
   .filters .pct { color: var(--text); font-variant-numeric: tabular-nums; }
 
+  /* Rolling-precision chip (rendered when labels exist) */
+  .precision-chip {
+    background: var(--panel2); border: 1px solid var(--line);
+    border-radius: 8px; padding: 8px 12px; font-size: 12px;
+    margin-bottom: 12px; color: var(--text);
+  }
+  .precision-chip b { color: var(--accent); }
+  .label-confirmed { color: var(--green); font-weight: 600; }
+  .label-false_positive { color: var(--red); font-weight: 600; }
+
   /* Tables */
   table { width: 100%; border-collapse: collapse; background: var(--panel); border-radius: 10px; overflow: hidden; }
   th, td { text-align: left; padding: 10px 14px; font-size: 13px; border-bottom: 1px solid var(--line); }
@@ -115,6 +125,7 @@
 
   <section>
     <h2>Anomaly timeline</h2>
+    <div id="precision-chip" class="precision-chip" style="display:none"></div>
     <div class="filters">
       <label>Window
         <select id="t-window">
@@ -169,7 +180,7 @@
       <span id="r-count" style="margin-left:auto;color:var(--muted);font-size:12px"></span>
     </div>
     <table id="alerts">
-      <thead><tr><th>Time (UTC)</th><th>Symbol</th><th>Severity</th><th>Score</th><th>Detail</th></tr></thead>
+      <thead><tr><th>Time (UTC)</th><th>Symbol</th><th>Severity</th><th>Score</th><th>Label</th><th>Detail</th></tr></thead>
       <tbody></tbody>
     </table>
   </section>
@@ -345,8 +356,38 @@ async function loadTimeline() {
   }, {notMerge: true});
 }
 
+// ----- Rolling-precision chip (hidden until labels exist) -----
+async function loadPrecisionChip() {
+  try {
+    const p = await j("data/precision.json");
+    if (!p || !p.total_labeled) return;   // nothing labeled yet
+    const overall = p.overall_precision == null
+      ? "—" : (p.overall_precision * 100).toFixed(0) + "%";
+    const parts = [`<b>Rolling precision (${p.window_days}d):</b> ${overall} on ${p.total_labeled} label${p.total_labeled === 1 ? "" : "s"}`];
+    for (const d of p.by_detector || []) {
+      if (d.labeled) {
+        parts.push(`${d.detector}: ${(d.precision * 100).toFixed(0)}% (${d.confirmed}/${d.labeled})`);
+      }
+    }
+    const chip = document.getElementById("precision-chip");
+    chip.innerHTML = parts.join(" &middot; ");
+    chip.style.display = "block";
+  } catch { /* precision.json not published yet — leave chip hidden */ }
+}
+
 // ----- Recent Alerts (filterable, sortable) -----
+let feedbackByKey = {};   // (symbol|timestamp) -> label
+
 async function loadAlerts() {
+  // Feedback labels are optional; tolerate their absence.
+  try {
+    const fb = await j("data/feedback.json");
+    feedbackByKey = {};
+    for (const f of (fb.feedback || [])) {
+      feedbackByKey[`${f.symbol}|${f.timestamp}`] = f.label;
+    }
+  } catch { feedbackByKey = {}; }
+
   const minSev = document.getElementById("r-severity").value;
   const minScore = parseFloat(document.getElementById("r-score").value) / 100;
   const sortKey = document.getElementById("r-sort").value;
@@ -367,15 +408,22 @@ async function loadAlerts() {
   document.getElementById("r-count").textContent = `${filtered.length} of ${all.events.length} events`;
 
   const tbody = document.querySelector("#alerts tbody");
-  tbody.innerHTML = filtered.slice(0, 100).map(e => `
+  tbody.innerHTML = filtered.slice(0, 100).map(e => {
+    const label = feedbackByKey[`${e.symbol}|${e.timestamp}`];
+    const labelCell = label
+      ? `<span class="label-${label}">${label === "confirmed" ? "confirmed" : "false positive"}</span>`
+      : `<span style="color:var(--muted)">—</span>`;
+    return `
     <tr>
       <td>${new Date(e.timestamp).toISOString().replace("T", " ").slice(0, 19)}</td>
       <td>${e.symbol}</td>
       <td><span class="sev-${e.severity || "low"}">${e.severity || "low"}</span></td>
       <td>${fmt(e.score, 3)}</td>
+      <td>${labelCell}</td>
       <td>${e.description || ""}</td>
-    </tr>`).join("") ||
-    `<tr><td colspan="5" class="empty">No alerts match the current filters.</td></tr>`;
+    </tr>`;
+  }).join("") ||
+    `<tr><td colspan="6" class="empty">No alerts match the current filters.</td></tr>`;
 }
 
 // ----- Wire-up -----
@@ -384,6 +432,7 @@ async function init() {
   await loadCorrelation();
   await loadTimeline();
   await loadAlerts();
+  await loadPrecisionChip();
 
   // Price-chart symbol bar
   const latest = await j("data/latest.json");
