@@ -24,9 +24,6 @@ UNIVERSE_PATH = os.path.join(
     "config", "universe.json",
 )
 
-_cache: Optional[Universe] = None
-_cache_path: Optional[str] = None
-
 
 class UniverseError(RuntimeError):
     """Raised when config/universe.json is missing, malformed, or invalid."""
@@ -37,6 +34,12 @@ class Universe:
     symbols: tuple[str, ...]
     labels: dict[str, str]
     pairs: tuple[tuple[str, str], ...]
+
+
+# Process-level cache (path-aware; declared after Universe so the
+# annotation resolves on every Python version).
+_cache: Optional[Universe] = None
+_cache_path: Optional[str] = None
 
 
 def load_universe(
