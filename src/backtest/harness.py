@@ -64,6 +64,10 @@ def _alert_matches_event(alert: dict, event, target: str) -> bool:
     in_window = event.start <= alert["_tick"] <= event.end + lag_margin
     if not in_window:
         return False
+    # Joint events span the whole symbol set — the completing symbol's
+    # name is arbitrary, so match on the window alone.
+    if alert.get("metadata", {}).get("detector") == "joint_mahalanobis":
+        return True
     # Point-detector alerts carry the processed symbol; correlation-break
     # alerts fire on either member of the pair being checked.
     if alert["asset"] == target:

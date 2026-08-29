@@ -1,0 +1,42 @@
+name: BACKTEST-REPORT
+
+# Regenerates docs/backtest_report.md (+chart) from the backtest harness
+# and commits the result if it changed. Manual trigger only — the report
+# is deterministic given the code, so it changes exactly when detector
+# code changes. Never runs on push/PR; never blocks CI.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.11"
+          cache: pip
+
+      - name: Install dependencies
+        run: pip install -r requirements-dev.txt matplotlib
+
+      - name: Generate report
+        run: python scripts/run_backtest_report.py
+
+      - name: Commit report if changed
+        run: |
+          git config user.name "backtest-reporter"
+          git config user.email "actions@users.noreply.github.com"
+          git add docs/backtest_report.md docs/backtest_report.png
+          if git diff --cached --quiet; then
+            echo "Report unchanged — nothing to commit."
+          else
+            git commit -m "docs(backtest): regenerate detector quality report"
+            git push origin main
+          fi
