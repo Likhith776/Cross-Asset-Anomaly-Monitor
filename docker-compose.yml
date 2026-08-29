@@ -72,6 +72,9 @@ services:
     networks:
       - anomaly-net
     restart: unless-stopped
+    volumes:
+      - ./config:/app/config:ro
+
 
   streamlit:
     build:
@@ -107,6 +110,9 @@ services:
     networks:
       - anomaly-net
     restart: unless-stopped
+    volumes:
+      - ./config:/app/config:ro
+
 
   feature-consumer:
     build:
@@ -128,6 +134,9 @@ services:
     networks:
       - anomaly-net
     restart: unless-stopped
+    volumes:
+      - ./config:/app/config:ro
+
 
   anomaly-consumer:
     build:
@@ -149,6 +158,9 @@ services:
     networks:
       - anomaly-net
     restart: unless-stopped
+    volumes:
+      - ./config:/app/config:ro
+
 
   scheduler:
     build:
@@ -162,6 +174,7 @@ services:
       DEMO_DATABASE_URL: "postgresql://postgres:${POSTGRES_PASSWORD:-password}@postgres:5432/market_anomalies_demo"
       METRICS_HTTP_PORT: 9104
     volumes:
+      - ./config:/app/config:ro
       - backups:/backups
     depends_on:
       postgres:

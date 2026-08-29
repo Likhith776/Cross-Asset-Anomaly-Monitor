@@ -11,6 +11,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY src/detection/ ./src/detection/
 COPY src/metrics.py ./src/metrics.py
+COPY src/universe.py ./src/universe.py
+COPY config/ ./config/
 # Seeding scripts for the scheduled demo-dataset refresh cycle
 COPY scripts/ ./scripts/
 

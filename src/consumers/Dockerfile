@@ -12,6 +12,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 COPY src/consumers/ ./src/consumers/
 COPY src/api/ ./src/api/
 COPY src/metrics.py ./src/metrics.py
+COPY src/universe.py ./src/universe.py
+COPY config/ ./config/
 COPY src/detection/ ./src/detection/
 
 # Default to the feature consumer; the anomaly consumer overrides

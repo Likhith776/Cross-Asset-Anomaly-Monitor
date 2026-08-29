@@ -11,6 +11,8 @@ RUN pip install --no-cache-dir -r requirements.txt
 
 COPY src/api/ ./src/api/
 COPY src/metrics.py ./src/metrics.py
+COPY src/universe.py ./src/universe.py
+COPY config/ ./config/
 
 EXPOSE 8000
 
