@@ -22,6 +22,7 @@ import json
 import logging
 import os
 import re
+from typing import Optional
 from datetime import datetime, timedelta, timezone
 
 from src.detection.anomaly_engine import SYMBOLS
