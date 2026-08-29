@@ -100,6 +100,7 @@ services:
     environment:
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
       FINNHUB_API_KEY: ${FINNHUB_API_KEY:-}
+      METRICS_HTTP_PORT: 9101
     depends_on:
       kafka:
         condition: service_healthy
@@ -118,6 +119,7 @@ services:
     environment:
       DATABASE_URL: "postgresql://postgres:${POSTGRES_PASSWORD:-password}@postgres:5432/market_anomalies"
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      METRICS_HTTP_PORT: 9102
     depends_on:
       kafka:
         condition: service_healthy
@@ -138,6 +140,7 @@ services:
     environment:
       DATABASE_URL: "postgresql://postgres:${POSTGRES_PASSWORD:-password}@postgres:5432/market_anomalies"
       KAFKA_BOOTSTRAP_SERVERS: kafka:29092
+      METRICS_HTTP_PORT: 9103
     depends_on:
       kafka:
         condition: service_healthy
@@ -157,11 +160,41 @@ services:
     environment:
       DATABASE_URL: "postgresql://postgres:${POSTGRES_PASSWORD:-password}@postgres:5432/market_anomalies"
       DEMO_DATABASE_URL: "postgresql://postgres:${POSTGRES_PASSWORD:-password}@postgres:5432/market_anomalies_demo"
+      METRICS_HTTP_PORT: 9104
     volumes:
       - backups:/backups
     depends_on:
       postgres:
         condition: service_healthy
+    networks:
+      - anomaly-net
+    restart: unless-stopped
+
+  prometheus:
+    image: prom/prometheus:v2.53.0
+    container_name: prometheus
+    volumes:
+      - ./deploy/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+    ports:
+      - "9090:9090"
+    networks:
+      - anomaly-net
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:11.1.0
+    container_name: grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: ${GRAFANA_ADMIN_PASSWORD:-admin}
+    volumes:
+      - ./deploy/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./deploy/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana-data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    depends_on:
+      - prometheus
     networks:
       - anomaly-net
     restart: unless-stopped
@@ -175,3 +208,5 @@ volumes:
     name: anomaly-pgdata
   backups:
     name: anomaly-backups
+  grafana-data:
+    name: anomaly-grafana

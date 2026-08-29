@@ -10,6 +10,7 @@ COPY src/detection/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY src/detection/ ./src/detection/
+COPY src/metrics.py ./src/metrics.py
 # Seeding scripts for the scheduled demo-dataset refresh cycle
 COPY scripts/ ./scripts/
 

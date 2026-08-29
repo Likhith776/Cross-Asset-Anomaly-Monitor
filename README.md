@@ -204,6 +204,32 @@ Slim profile processes:
 
 Retention: `market_features` 30 days, `correlation_snapshots` 7 days.
 
+## Pipeline health: Prometheus + Grafana (Docker profile only)
+
+The full stack ships with metrics and dashboards. Two extra services are
+added to docker-compose (remove or comment them out and everything else
+runs identically — instrumentation is a no-op without them):
+
+- **Grafana**: http://localhost:3000 — log in with `admin` / `admin`
+  (override with `GRAFANA_ADMIN_PASSWORD` in `.env` before first start).
+  The **"Cross-Asset Pipeline Health"** dashboard is provisioned
+  automatically and shows:
+  - producer fetch rate per symbol and fetch-cycle latency (p50/p95)
+  - consumer throughput and **Kafka consumer lag** per partition
+  - detector execution latency (p50/p95 per detector: zscore, iforest,
+    correlation)
+  - anomaly-events insert rate
+  - API DB query latency (p95) on hot endpoints and DB write failures
+  - scheduler batch-cycle count/duration
+- **Prometheus**: http://localhost:9090 — raw metrics and targets view
+  (`Status → Targets` shows all five scrape jobs: fastapi, producer,
+  feature-consumer, anomaly-consumer, scheduler).
+
+Metrics are exposed by the API on `/metrics` and by small per-service
+HTTP servers on ports 9101–9104 inside the docker network (controlled
+by the `METRICS_HTTP_PORT` env var — services don't open one if it's
+unset, so older compose files keep working).
+
 ## Backups
 
 **Slim profile:** set `SLIM_BACKUPS=1` (requires `pg_dump` on PATH) —

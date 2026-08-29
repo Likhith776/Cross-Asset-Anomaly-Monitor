@@ -352,6 +352,14 @@ def run() -> None:
     setup_logging()
     shutdown = ShutdownHandler()
 
+    from src.metrics import (
+        PRODUCER_FETCH_SECONDS,
+        TICKS_FETCHED,
+        start_metrics_server_if_configured,
+    )
+
+    start_metrics_server_if_configured()
+
     logger.info("=" * 64)
     logger.info("  Market Data Producer — Starting")
     logger.info("  Kafka:   %s", KAFKA_BOOTSTRAP_SERVERS)
@@ -376,7 +384,10 @@ def run() -> None:
             fetch_id = str(uuid4())
 
             # --- Fetch ---
-            quotes = fetch_market_data(provider)
+            with PRODUCER_FETCH_SECONDS.time():
+                quotes = fetch_market_data(provider)
+            for q in quotes:
+                TICKS_FETCHED.labels(q.get("symbol", "UNKNOWN")).inc()
 
             if not quotes:
                 consecutive_empty += 1

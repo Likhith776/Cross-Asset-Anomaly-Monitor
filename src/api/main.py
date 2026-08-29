@@ -90,6 +90,11 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+# Prometheus exposition: always mounted (inert without prometheus_client).
+from src.metrics import DB_QUERY_SECONDS, mount_metrics  # noqa: E402
+
+mount_metrics(app)
+
 
 # ---------------------------------------------------------------------------
 # Dataset routing (live pipeline data vs seeded demo data)
@@ -244,7 +249,8 @@ async def get_assets(session: AsyncSession = Depends(get_session)):
         WHERE rn <= 100
         ORDER BY symbol, timestamp ASC
     """)
-    result = await session.execute(stmt, {"symbols": SYMBOLS})
+    with DB_QUERY_SECONDS.labels("/assets").time():
+        result = await session.execute(stmt, {"symbols": SYMBOLS})
     rows = result.mappings().all()
 
     # Group by symbol, preserving time order (oldest first)
@@ -325,10 +331,11 @@ async def get_anomalies(
         ORDER BY timestamp DESC
         LIMIT :limit
     """)
-    result = await session.execute(stmt, {
-        "min_score": min_score,
-        "limit": effective_limit,
-    })
+    with DB_QUERY_SECONDS.labels("/anomalies").time():
+        result = await session.execute(stmt, {
+            "min_score": min_score,
+            "limit": effective_limit,
+        })
     rows = result.mappings().all()
 
     return [
@@ -372,7 +379,8 @@ async def get_anomalies_by_symbol(
           AND timestamp >= NOW() - INTERVAL '{interval_str}'
         ORDER BY timestamp DESC
     """)
-    result = await session.execute(stmt, {"symbol": symbol})
+    with DB_QUERY_SECONDS.labels("/anomalies/{symbol}").time():
+        result = await session.execute(stmt, {"symbol": symbol})
     rows = result.mappings().all()
 
     return [
@@ -664,7 +672,8 @@ async def get_chart(
             ORDER BY timestamp DESC
             LIMIT :limit
         """)
-        result = await session.execute(stmt, {"symbol": symbol, "limit": total_fetch})
+        with DB_QUERY_SECONDS.labels("/chart/{symbol}").time():
+            result = await session.execute(stmt, {"symbol": symbol, "limit": total_fetch})
         all_rows = list(reversed(result.mappings().all()))
         history_start = history_padding if len(all_rows) > history_padding else 0
 

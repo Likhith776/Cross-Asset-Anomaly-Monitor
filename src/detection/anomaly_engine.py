@@ -245,6 +245,12 @@ def insert_anomaly_events(
         VALUES %s
     """
     execute_values(cur, sql, rows, page_size=50)
+    try:
+        from src.metrics import ANOMALIES_PERSISTED
+
+        ANOMALIES_PERSISTED.inc(len(rows))
+    except ImportError:
+        pass
     return len(rows)
 
 

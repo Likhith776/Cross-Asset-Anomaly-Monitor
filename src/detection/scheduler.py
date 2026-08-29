@@ -37,6 +37,7 @@ import psycopg2
 from dotenv import load_dotenv
 
 from src.detection.anomaly_engine import run_detection
+from src.metrics import BATCH_CYCLE_SECONDS, start_metrics_server_if_configured
 
 # ---------------------------------------------------------------------------
 # Configuration
@@ -469,6 +470,7 @@ def get_connection():
 def main() -> None:
     setup_logging()
     shutdown = ShutdownHandler()
+    start_metrics_server_if_configured()
 
     logger.info("=" * 64)
     logger.info("  Detection Scheduler — Starting")
@@ -526,7 +528,8 @@ def main() -> None:
 
             if now >= next_detection:
                 try:
-                    run_detection_cycle(conn)
+                    with BATCH_CYCLE_SECONDS.time():
+                        run_detection_cycle(conn)
                 except Exception:
                     logger.warning("[SCHED] Detection cycle failed — will retry next interval")
                 next_detection = datetime.now(timezone.utc) + timedelta(seconds=DETECTION_INTERVAL_SECONDS)

@@ -6,6 +6,7 @@ and aggregates the results.
 """
 
 import logging
+import time
 from datetime import datetime
 from typing import Any, Optional
 
@@ -15,6 +16,7 @@ from src.detection.base import BaseDetector, AnomalyEvent
 from src.detection.zscore import ZScoreDetector
 from src.detection.isolation_forest import IsolationForestDetector
 from src.detection.cross_asset import CrossAssetCorrelationDetector
+from src.metrics import DETECTOR_LATENCY
 
 logger = logging.getLogger(__name__)
 
@@ -205,6 +207,7 @@ class DetectionPipeline:
         anomalies: list[AnomalyEvent] = []
 
         for detector in self.detectors:
+            started = time.perf_counter()
             try:
                 event = detector.detect(asset=asset, price=price, timestamp=timestamp)
                 if event is not None:
@@ -222,6 +225,10 @@ class DetectionPipeline:
                     asset,
                     e,
                     exc_info=True,
+                )
+            finally:
+                DETECTOR_LATENCY.labels(detector.name).observe(
+                    time.perf_counter() - started
                 )
 
         if self.aggregate and anomalies:

@@ -1,0 +1,198 @@
+{
+  "annotations": { "list": [] },
+  "editable": true,
+  "fiscalYearStartMonth": 0,
+  "graphTooltip": 1,
+  "id": null,
+  "links": [],
+  "liveNow": false,
+  "panels": [
+    {
+      "datasource": { "type": "prometheus", "uid": "anomaly-prom" },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 0 },
+      "id": 1,
+      "options": {
+        "legend": { "calcs": ["lastNotNull"], "displayMode": "table", "placement": "bottom" },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "anomaly-prom" },
+          "expr": "sum by (symbol) (rate(pipeline_ticks_fetched_total[5m]))",
+          "legendFormat": "{{symbol}}"
+        }
+      ],
+      "title": "Producer — quotes fetched per second",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "anomaly-prom" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 0 },
+      "id": 2,
+      "options": {
+        "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom" },
+        "tooltip": { "mode": "single", "sort": "none" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "anomaly-prom" },
+          "expr": "histogram_quantile(0.50, rate(producer_fetch_seconds_bucket[5m]))",
+          "legendFormat": "p50"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "anomaly-prom" },
+          "expr": "histogram_quantile(0.95, rate(producer_fetch_seconds_bucket[5m]))",
+          "legendFormat": "p95"
+        }
+      ],
+      "title": "Producer — fetch cycle latency",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "anomaly-prom" },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 8 },
+      "id": 3,
+      "options": {
+        "legend": { "calcs": ["lastNotNull"], "displayMode": "table", "placement": "bottom" },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "anomaly-prom" },
+          "expr": "sum by (instance) (rate(pipeline_messages_consumed_total[5m]))",
+          "legendFormat": "{{instance}}"
+        }
+      ],
+      "title": "Consumers — messages processed per second",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "anomaly-prom" },
+      "fieldConfig": {
+        "defaults": {
+          "unit": "short",
+          "thresholds": { "mode": "absolute", "steps": [
+            { "color": "green", "value": null },
+            { "color": "orange", "value": 50 },
+            { "color": "red", "value": 200 }
+          ] }
+        },
+        "overrides": []
+      },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 8 },
+      "id": 4,
+      "options": {
+        "legend": { "calcs": ["max"], "displayMode": "table", "placement": "bottom" },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "anomaly-prom" },
+          "expr": "kafka_consumer_lag_messages",
+          "legendFormat": "{{instance}} {{partition}}"
+        }
+      ],
+      "title": "Consumers — Kafka lag (messages behind)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "anomaly-prom" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 16 },
+      "id": 5,
+      "options": {
+        "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom" },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "anomaly-prom" },
+          "expr": "histogram_quantile(0.50, sum by (le, detector) (rate(detector_latency_seconds_bucket[5m])))",
+          "legendFormat": "p50 {{detector}}"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "anomaly-prom" },
+          "expr": "histogram_quantile(0.95, sum by (le, detector) (rate(detector_latency_seconds_bucket[5m])))",
+          "legendFormat": "p95 {{detector}}"
+        }
+      ],
+      "title": "Detector execution latency (p50/p95 by detector)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "anomaly-prom" },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 16 },
+      "id": 6,
+      "options": {
+        "legend": { "calcs": ["lastNotNull"], "displayMode": "table", "placement": "bottom" },
+        "tooltip": { "mode": "single", "sort": "none" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "anomaly-prom" },
+          "expr": "sum by (instance) (increase(anomalies_persisted_total[5m]))",
+          "legendFormat": "{{instance}}"
+        }
+      ],
+      "title": "Anomaly events inserted (per 5 min)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "anomaly-prom" },
+      "fieldConfig": { "defaults": { "unit": "s" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 24 },
+      "id": 7,
+      "options": {
+        "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom" },
+        "tooltip": { "mode": "multi", "sort": "desc" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "anomaly-prom" },
+          "expr": "histogram_quantile(0.95, sum by (le, endpoint) (rate(db_query_seconds_bucket[5m])))",
+          "legendFormat": "p95 {{endpoint}}"
+        }
+      ],
+      "title": "API — DB query latency on hot endpoints (p95)",
+      "type": "timeseries"
+    },
+    {
+      "datasource": { "type": "prometheus", "uid": "anomaly-prom" },
+      "fieldConfig": { "defaults": { "unit": "short" }, "overrides": [] },
+      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 24 },
+      "id": 8,
+      "options": {
+        "legend": { "calcs": ["lastNotNull"], "displayMode": "table", "placement": "bottom" },
+        "tooltip": { "mode": "single", "sort": "none" }
+      },
+      "targets": [
+        {
+          "datasource": { "type": "prometheus", "uid": "anomaly-prom" },
+          "expr": "sum by (instance) (rate(db_write_total{outcome=\"fail\"}[5m]))",
+          "legendFormat": "failures {{instance}}"
+        },
+        {
+          "datasource": { "type": "prometheus", "uid": "anomaly-prom" },
+          "expr": "sum by (instance) (increase(batch_cycle_seconds_count[5m]))",
+          "legendFormat": "batch cycles {{instance}}"
+        }
+      ],
+      "title": "DB write failures & batch cycles",
+      "type": "timeseries"
+    }
+  ],
+  "refresh": "30s",
+  "schemaVersion": 39,
+  "tags": ["cross-asset", "anomaly", "pipeline"],
+  "templating": { "list": [] },
+  "time": { "from": "now-3h", "to": "now" },
+  "timepicker": {},
+  "timezone": "utc",
+  "title": "Cross-Asset Pipeline Health",
+  "uid": "cross-asset-pipeline-health",
+  "version": 1
+}

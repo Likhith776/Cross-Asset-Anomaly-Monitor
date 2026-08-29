@@ -562,6 +562,41 @@ def run() -> None:
 
     consumer = create_consumer(KAFKA_BOOTSTRAP_SERVERS, KAFKA_TOPIC, CONSUMER_GROUP)
 
+    # --- Prometheus instrumentation (opt-in HTTP server; counters always on)
+    from src.metrics import (
+        CONSUMER_LAG,
+        DB_WRITE,
+        MESSAGES_CONSUMED,
+        start_metrics_server_if_configured,
+    )
+
+    start_metrics_server_if_configured()
+
+    def _sample_lag() -> None:
+        """Periodic consumer-lag sampler; failures never break the loop."""
+        import threading
+
+        def _loop():
+            while True:
+                time.sleep(60)
+                try:
+                    partitions = consumer.assignment()
+                    if not partitions:
+                        continue
+                    end_offsets = consumer.end_offsets(partitions)
+                    for tp in partitions:
+                        committed = consumer.committed(tp)
+                        if committed is None:
+                            continue
+                        lag = end_offsets.get(tp, 0) - committed.offset
+                        CONSUMER_LAG.labels(f"{tp.topic}:{tp.partition}").set(lag)
+                except Exception as exc:
+                    logger.debug("[LAG] sampling failed: %s", exc)
+
+        threading.Thread(target=_loop, daemon=True, name="lag-sampler").start()
+
+    _sample_lag()
+
     message_count = 0
     write_success = 0
     write_fail = 0
@@ -628,8 +663,11 @@ def run() -> None:
                     # --- Write to database ---
                     if writer.write_feature(db_record):
                         write_success += 1
+                        DB_WRITE.labels("success").inc()
                     else:
                         write_fail += 1
+                        DB_WRITE.labels("fail").inc()
+                    MESSAGES_CONSUMED.inc()
 
                     # --- Periodic correlation snapshot ---
                     if message_count % CORR_SNAPSHOT_INTERVAL == 0:

@@ -10,5 +10,6 @@ COPY src/producers/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY src/producers/ ./src/producers/
+COPY src/metrics.py ./src/metrics.py
 
 CMD ["python", "-m", "src.producers.market_data_producer"]

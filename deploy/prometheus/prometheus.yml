@@ -1,0 +1,30 @@
+# Prometheus scrape configuration for the Cross-Asset Anomaly Detection
+# stack. Targets are the docker-compose service names on the anomaly-net
+# network; the FastAPI API exposes /metrics on its own port, the other
+# services run a small exposition server on the METRICS_HTTP_PORT each
+# is assigned in docker-compose.yml.
+global:
+  scrape_interval: 15s
+  evaluation_interval: 15s
+
+scrape_configs:
+  - job_name: anomaly-fastapi
+    metrics_path: /metrics/   # Starlette Mount redirects the bare path
+    static_configs:
+      - targets: ["fastapi:8000"]
+
+  - job_name: anomaly-producer
+    static_configs:
+      - targets: ["producer:9101"]
+
+  - job_name: anomaly-feature-consumer
+    static_configs:
+      - targets: ["feature-consumer:9102"]
+
+  - job_name: anomaly-anomaly-consumer
+    static_configs:
+      - targets: ["anomaly-consumer:9103"]
+
+  - job_name: anomaly-scheduler
+    static_configs:
+      - targets: ["scheduler:9104"]

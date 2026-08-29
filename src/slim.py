@@ -253,6 +253,12 @@ class SlimApp:
         with self.writer._conn.cursor() as cur:
             cur.execute(sql, params)
         self.writer._conn.commit()
+        try:
+            from src.metrics import ANOMALIES_PERSISTED
+
+            ANOMALIES_PERSISTED.inc()
+        except ImportError:
+            pass
 
     # ------------------------------------------------------------------
     # Threads

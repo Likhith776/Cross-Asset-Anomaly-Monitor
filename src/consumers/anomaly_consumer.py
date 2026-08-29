@@ -146,6 +146,7 @@ class AnomalyConsumer(BaseConsumer):
 
         async with async_session_factory() as session:
             try:
+                persisted = 0
                 for anomaly in anomalies:
                     score = round(float(anomaly["score"]), 3)
 
@@ -194,7 +195,12 @@ class AnomalyConsumer(BaseConsumer):
                         anomaly["type"],
                         anomaly["severity"],
                     )
+                    persisted += 1
                 await session.commit()
+                if persisted:
+                    from src.metrics import ANOMALIES_PERSISTED
+
+                    ANOMALIES_PERSISTED.inc(persisted)
             except Exception as e:
                 await session.rollback()
                 logger.error(

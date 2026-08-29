@@ -10,6 +10,7 @@ COPY src/api/requirements.txt .
 RUN pip install --no-cache-dir -r requirements.txt
 
 COPY src/api/ ./src/api/
+COPY src/metrics.py ./src/metrics.py
 
 EXPOSE 8000
 

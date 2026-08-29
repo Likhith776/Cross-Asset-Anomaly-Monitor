@@ -72,11 +72,41 @@ class BaseConsumer(ABC):
     async def run(self) -> None:
         """Consume messages in a loop and process each one."""
         await self.start()
+
+        from src.metrics import (
+            CONSUMER_LAG,
+            MESSAGES_CONSUMED,
+            start_metrics_server_if_configured,
+        )
+
+        start_metrics_server_if_configured()
+
+        async def _sample_lag() -> None:
+            """Periodic consumer-lag sampler; failures never break the loop."""
+            while True:
+                await asyncio.sleep(60)
+                try:
+                    partitions = self._consumer.assignment()
+                    if not partitions:
+                        continue
+                    end_offsets = await self._consumer.end_offsets(partitions)
+                    for tp in partitions:
+                        committed = await self._consumer.committed(tp)
+                        if committed is None:
+                            continue
+                        lag = end_offsets.get(tp, 0) - committed.offset
+                        CONSUMER_LAG.labels(f"{tp.topic}:{tp.partition}").set(lag)
+                except Exception as exc:
+                    logger.debug("[LAG] sampling failed: %s", exc)
+
+        lag_task = asyncio.create_task(_sample_lag())
+
         try:
             async for message in self._consumer:
                 if not self._running:
                     break
                 try:
+                    MESSAGES_CONSUMED.inc()
                     await self.process_message(key=message.key, value=message.value)
                     await self._consumer.commit()
                 except Exception as e:
@@ -90,4 +120,5 @@ class BaseConsumer(ABC):
         except asyncio.CancelledError:
             logger.info("Consumer run loop cancelled")
         finally:
+            lag_task.cancel()
             await self.stop()
