@@ -372,12 +372,13 @@ class LiveSite:
         return None, None
 
     def _persist_anomaly(self, params: tuple) -> None:
-        ts, symbol, score, z, ewma, pca, description = params
+        ts, symbol, score, z, ewma, pca, description, macro_context = params
         self.store.anomalies.insert(0, {
             "timestamp": ts.isoformat() if hasattr(ts, "isoformat") else str(ts),
             "symbol": symbol,
             "score": float(score),
             "description": description,
+            "macro_context": macro_context,
         })
         del self.store.anomalies[ANOMALIES_CAP:]
 
@@ -439,8 +440,9 @@ class LiveSite:
             os.path.join(self.out_dir, "data", "anomalies.json"),
             {"schema": SCHEMA_VERSION, "generated_at": generated_at,
              "events": [
-                 {**{k: e[k] for k in ("timestamp", "symbol", "score", "description")},
-                  "severity": self._extract_severity(e.get("description", ""))}
+                 {**{k: e.get(k) for k in ("timestamp", "symbol", "score", "description")},
+                  "severity": self._extract_severity(e.get("description", "")),
+                  "macro_context": e.get("macro_context")}
                  for e in self.store.anomalies[:200]
              ]},
         )

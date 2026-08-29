@@ -89,8 +89,16 @@ def create_anomaly_events_table(cur):
             ewma_flag       BOOLEAN         DEFAULT FALSE,
             pca_flag        BOOLEAN         DEFAULT FALSE,
             description     TEXT,
+            macro_context   VARCHAR(120),
             created_at      TIMESTAMPTZ     DEFAULT NOW()
         );
+    """)
+
+    # Migration for databases created before macro annotations existed.
+    # Idempotent: ADD COLUMN IF NOT EXISTS is a no-op once applied.
+    cur.execute("""
+        ALTER TABLE anomaly_events
+            ADD COLUMN IF NOT EXISTS macro_context VARCHAR(120);
     """)
 
     cur.execute("""

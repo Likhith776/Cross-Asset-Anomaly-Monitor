@@ -51,6 +51,11 @@ class AnomalyEventResponse(BaseModel):
     ewma_flag: bool
     pca_flag: bool
     description: Optional[str] = None
+    macro_context: Optional[str] = Field(
+        None,
+        description="Scheduled macro release (FOMC/CPI/NFP/...) the anomaly "
+                    "coincided with, when within the annotation window.",
+    )
 
     model_config = {"from_attributes": True}
 

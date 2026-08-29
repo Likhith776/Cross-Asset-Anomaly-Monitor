@@ -210,27 +210,38 @@ def insert_anomaly_events(
     """
     Insert anomaly events into the anomaly_events table.
 
+    Each event is annotated with macro-calendar context when its
+    timestamp coincides with a scheduled release (annotation only —
+    never suppression).
+
     Returns the number of rows inserted.
     """
     if not events:
         return 0
 
-    rows = [
-        (
+    from src.detection.macro_calendar import augment_description, macro_event_for
+
+    rows = []
+    for e in events:
+        macro = macro_event_for(e["timestamp"])
+        description = e["description"]
+        if macro:
+            description = augment_description(description, e["timestamp"])
+        rows.append((
             e["timestamp"],
             e["symbol"],
             e["anomaly_score"],
             e["z_flag"],
             e["ewma_flag"],
             e["pca_flag"],
-            e["description"],
-        )
-        for e in events
-    ]
+            description,
+            macro["name"] if macro else None,
+        ))
 
     sql = """
         INSERT INTO anomaly_events
-            (timestamp, symbol, anomaly_score, z_flag, ewma_flag, pca_flag, description)
+            (timestamp, symbol, anomaly_score, z_flag, ewma_flag, pca_flag,
+             description, macro_context)
         VALUES %s
     """
     execute_values(cur, sql, rows, page_size=50)

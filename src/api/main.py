@@ -319,7 +319,7 @@ async def get_anomalies(
 
     stmt = text("""
         SELECT id, timestamp, symbol, anomaly_score,
-               z_flag, ewma_flag, pca_flag, description
+               z_flag, ewma_flag, pca_flag, description, macro_context
         FROM anomaly_events
         WHERE anomaly_score >= :min_score
         ORDER BY timestamp DESC
@@ -341,6 +341,7 @@ async def get_anomalies(
             ewma_flag=bool(r["ewma_flag"]),
             pca_flag=bool(r["pca_flag"]),
             description=r["description"],
+            macro_context=r["macro_context"],
         )
         for r in rows
     ]
@@ -365,7 +366,7 @@ async def get_anomalies_by_symbol(
     interval_str = f"{days} days"
     stmt = text(f"""
         SELECT id, timestamp, symbol, anomaly_score,
-               z_flag, ewma_flag, pca_flag, description
+               z_flag, ewma_flag, pca_flag, description, macro_context
         FROM anomaly_events
         WHERE symbol = :symbol
           AND timestamp >= NOW() - INTERVAL '{interval_str}'
@@ -384,6 +385,7 @@ async def get_anomalies_by_symbol(
             ewma_flag=bool(r["ewma_flag"]),
             pca_flag=bool(r["pca_flag"]),
             description=r["description"],
+            macro_context=r["macro_context"],
         )
         for r in rows
     ]

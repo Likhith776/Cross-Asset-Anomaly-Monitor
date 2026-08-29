@@ -80,6 +80,7 @@ from src.consumers.feature_consumer import (
     warm_start as warm_windows,
 )
 from src.detection.anomaly_engine import ANOMALY_COOLDOWN_MINUTES, SYMBOLS, should_insert_event
+from src.detection.macro_calendar import augment_description, macro_event_for
 from src.detection.pipeline import DetectionPipeline
 from src.producers.data_provider import MarketDataProvider
 
@@ -194,6 +195,13 @@ class SlimApp:
             if flag_key:
                 flags[flag_key] = True
 
+            # Macro-calendar context: annotate (never suppress) when the
+            # tick coincides with a scheduled release like FOMC/CPI/NFP.
+            description = build_description(symbol, anomaly)
+            macro = macro_event_for(ts)
+            if macro:
+                description = augment_description(description, ts)
+
             self._persist_anomaly(
                 (
                     ts,
@@ -202,7 +210,8 @@ class SlimApp:
                     flags["z_flag"],
                     flags["ewma_flag"],
                     flags["pca_flag"],
-                    build_description(symbol, anomaly),
+                    description,
+                    macro["name"] if macro else None,
                 )
             )
             logger.warning(
@@ -238,8 +247,8 @@ class SlimApp:
         sql = """
             INSERT INTO anomaly_events
                 (timestamp, symbol, anomaly_score,
-                 z_flag, ewma_flag, pca_flag, description)
-            VALUES (%s, %s, %s, %s, %s, %s, %s)
+                 z_flag, ewma_flag, pca_flag, description, macro_context)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
         """
         with self.writer._conn.cursor() as cur:
             cur.execute(sql, params)

@@ -27,6 +27,7 @@ from sqlalchemy import text
 from src.api.database import AnomalyEvent, async_session_factory
 from src.consumers.base import BaseConsumer
 from src.detection.anomaly_engine import SYMBOLS, should_insert_event
+from src.detection.macro_calendar import augment_description, macro_event_for
 from src.detection.pipeline import DetectionPipeline
 
 logger = logging.getLogger("anomaly_consumer")
@@ -169,6 +170,13 @@ class AnomalyConsumer(BaseConsumer):
                     if flag_key:
                         flags[flag_key] = True
 
+                    # Macro-calendar context: annotate (never suppress)
+                    # when the tick coincides with a scheduled release.
+                    description = build_description(symbol, anomaly)
+                    macro = macro_event_for(timestamp)
+                    if macro:
+                        description = augment_description(description, timestamp)
+
                     session.add(AnomalyEvent(
                         timestamp=timestamp,
                         symbol=symbol,
@@ -176,7 +184,8 @@ class AnomalyConsumer(BaseConsumer):
                         z_flag=flags["z_flag"],
                         ewma_flag=flags["ewma_flag"],
                         pca_flag=flags["pca_flag"],
-                        description=build_description(symbol, anomaly),
+                        description=description,
+                        macro_context=macro["name"] if macro else None,
                     ))
                     logger.warning(
                         "[ANOMALY] %s score=%.3f type=%s severity=%s",
