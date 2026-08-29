@@ -80,6 +80,8 @@ from src.consumers.feature_consumer import (
     warm_start as warm_windows,
 )
 from src.detection.anomaly_engine import ANOMALY_COOLDOWN_MINUTES, SYMBOLS, should_insert_event
+from src.detection.lead_lag import augment_description as augment_lead_lag
+from src.detection.lead_lag import lead_lag_for
 from src.detection.macro_calendar import augment_description, macro_event_for
 from src.detection.pipeline import DetectionPipeline
 from src.producers.data_provider import MarketDataProvider
@@ -206,6 +208,12 @@ class SlimApp:
             regime = anomaly.get("metadata", {}).get("regime")
             if regime:
                 description += f" [regime: {regime}]"
+
+            # Lead-lag context: which paired asset likely moved first
+            # (annotation only, same as macro context).
+            lead_lag = lead_lag_for(symbol, self.pipeline.recent_returns())
+            if lead_lag:
+                description = augment_lead_lag(description, lead_lag)
 
             self._persist_anomaly(
                 (

@@ -25,6 +25,7 @@ import psycopg2
 from psycopg2.extras import execute_values
 from dotenv import load_dotenv
 
+from src.detection.lead_lag import augment_description, lead_lag_for
 from src.detection.regime import (
     REGIME_MEDIUM,
     classify_vol_percentile,
@@ -610,9 +611,24 @@ def run_detection(db_conn: Any) -> list[dict[str, Any]]:
     cur = db_conn.cursor()
 
     try:
+        # Pre-pass: fetch every symbol's feature window up front so the
+        # lead-lag annotation sees returns across the full universe.
+        features_by_symbol: dict[str, list[dict[str, Any]]] = {
+            symbol: fetch_features(cur, symbol, window=FEATURE_WINDOW)
+            for symbol in SYMBOLS
+        }
+        returns_by_symbol: dict[str, list[float]] = {
+            symbol: [
+                float(f["return_1m"])
+                for f in features
+                if f.get("return_1m") is not None
+            ][-60:]
+            for symbol, features in features_by_symbol.items()
+        }
+
         for symbol in SYMBOLS:
-            # Fetch feature window
-            features = fetch_features(cur, symbol, window=FEATURE_WINDOW)
+            # Feature window (fetched in the pre-pass above)
+            features = features_by_symbol[symbol]
 
             if not features:
                 logger.warning(
@@ -678,6 +694,13 @@ def run_detection(db_conn: Any) -> list[dict[str, Any]]:
             # Queue for insertion if above threshold
             if result["anomaly_score"] > SCORE_INSERT_THRESHOLD:
                 description = result["description"] + f" [regime: {regime}]"
+
+                # Lead-lag context: which paired asset likely moved
+                # first (annotation only, same as macro context).
+                lead_lag = lead_lag_for(symbol, returns_by_symbol)
+                if lead_lag:
+                    description = augment_description(description, lead_lag)
+
                 events_to_insert.append({
                     "timestamp": result["timestamp"] or run_timestamp,
                     "symbol": result["symbol"],

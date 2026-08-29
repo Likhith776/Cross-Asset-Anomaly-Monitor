@@ -26,6 +26,7 @@ from typing import Optional
 from datetime import datetime, timedelta, timezone
 
 from src.detection.anomaly_engine import SYMBOLS
+from src.detection.lead_lag import extract_lead_lag
 from src.producers.data_provider import MarketDataProvider
 from src.slim import SlimApp
 from src.universe import load_universe
@@ -396,6 +397,11 @@ class LiveSite:
         m = re.search(r"\[regime:\s*(\w+)\]", description or "")
         return m.group(1) if m else None
 
+    @staticmethod
+    def _extract_lead_lag(description: str) -> Optional[dict]:
+        """Structured lead-lag from the '[lead-lag: ...]' marker."""
+        return extract_lead_lag(description)
+
     # ------------------------------------------------------------------
     # Run one cycle and publish artifacts
     # ------------------------------------------------------------------
@@ -461,6 +467,7 @@ class LiveSite:
                  {**{k: e.get(k) for k in ("timestamp", "symbol", "score", "description")},
                   "severity": self._extract_severity(e.get("description", "")),
                   "regime": self._extract_regime(e.get("description", "")),
+                  "lead_lag": self._extract_lead_lag(e.get("description", "")),
                   "macro_context": e.get("macro_context")}
                  for e in self.store.anomalies[:200]
              ]},

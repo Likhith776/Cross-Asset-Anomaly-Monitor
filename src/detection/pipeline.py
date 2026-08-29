@@ -188,6 +188,25 @@ class DetectionPipeline:
 
         return counts
 
+    def recent_returns(self, max_points: int = 60) -> dict[str, list[float]]:
+        """
+        Per-symbol per-tick returns from the canonical price windows,
+        most recent last. Read-only view over the detectors' windows —
+        consumed by the lead-lag annotation layer.
+        """
+        out: dict[str, list[float]] = {}
+        for detector in self.detectors:
+            for symbol, prices in detector._price_windows.items():
+                if symbol in out or len(prices) < 2:
+                    continue
+                rets = [
+                    prices[i + 1] / prices[i] - 1.0
+                    for i in range(len(prices) - 1)
+                    if prices[i] > 0
+                ]
+                out[symbol] = rets[-max_points:]
+        return out
+
     def add_detector(self, detector: BaseDetector) -> None:
         """Add a custom detector to the pipeline."""
         self.detectors.append(detector)
