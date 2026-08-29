@@ -45,7 +45,13 @@ load_dotenv()
 # Configuration
 # ---------------------------------------------------------------------------
 
-SYMBOLS = ["^GSPC", "^IXIC", "BTC-USD", "GC=F", "CL=F", "EURUSD=X", "^TNX"]
+# Universe (symbols + labels) comes from config/universe.json — single
+# source of truth shared by every entry point.
+from src.universe import load_universe  # noqa: E402
+
+_UNIVERSE = load_universe()
+SYMBOLS: list[str] = list(_UNIVERSE.symbols)
+SYMBOL_LABELS: dict[str, str] = dict(_UNIVERSE.labels)
 
 # Detector weights — must match anomaly_engine.py exactly
 W_Z_SCORE = 0.35
@@ -296,6 +302,7 @@ async def get_assets(session: AsyncSession = Depends(get_session)):
 
         response.append(AssetStatus(
             symbol=symbol,
+            label=SYMBOL_LABELS.get(symbol),
             price=latest.get("price"),
             z_score=latest.get("z_score"),
             ewma_vol=latest.get("ewma_vol"),

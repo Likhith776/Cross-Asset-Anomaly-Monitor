@@ -34,15 +34,11 @@ from src.producers.data_provider import MarketDataProvider
 KAFKA_BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
 KAFKA_TOPIC = os.getenv("KAFKA_TOPIC", "market-data")
 
-TICKERS = [
-    "^GSPC",      # S&P 500
-    "^IXIC",      # NASDAQ Composite
-    "BTC-USD",    # Bitcoin
-    "GC=F",       # Gold Futures
-    "CL=F",       # Crude Oil Futures
-    "EURUSD=X",   # EUR/USD
-    "^TNX",       # 10-Year Treasury Yield
-]
+# Universe (tickers) comes from config/universe.json — single source of
+# truth shared by every entry point; human-readable labels live there too.
+from src.universe import load_universe  # noqa: E402
+
+TICKERS: list[str] = list(load_universe().symbols)
 
 # Poll cadence. Yahoo's underlying feed does not update faster than this
 # for any asset class, and going lower risks 429 rate limiting. Crypto/FX

@@ -47,7 +47,11 @@ KAFKA_BOOTSTRAP_SERVERS = os.getenv("KAFKA_BOOTSTRAP_SERVERS", "localhost:9092")
 KAFKA_TOPIC = os.getenv("KAFKA_TOPIC", "market-data")
 CONSUMER_GROUP = os.getenv("CONSUMER_GROUP", "feature-engineering-group")
 
-SYMBOLS = ["^GSPC", "^IXIC", "BTC-USD", "GC=F", "CL=F", "EURUSD=X", "^TNX"]
+# Universe (symbols) comes from config/universe.json — single source of
+# truth shared by every entry point.
+from src.universe import load_universe  # noqa: E402
+
+SYMBOLS: list[str] = list(load_universe().symbols)
 
 WINDOW_SIZE = 200       # Max data points kept per symbol
 Z_SCORE_WINDOW = 20     # Rolling window for z-score

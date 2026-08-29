@@ -1,0 +1,27 @@
+{
+  "_readme": [
+    "Single source of truth for the traded universe and monitored",
+    "correlation pairs. Every entry point (producer, consumers,",
+    "scheduler, API, slim profile, live-site publisher, backtest",
+    "harness) loads this file once at startup; adding or removing a",
+    "symbol or pair requires editing only this file.",
+    "Labels are human-readable names shown in the API and dashboards.",
+    "Correlation pairs must reference symbols defined in the symbol",
+    "list — the loader fails fast with a clear error otherwise."
+  ],
+  "symbols": [
+    { "symbol": "^GSPC",    "label": "S&P 500" },
+    { "symbol": "^IXIC",    "label": "Nasdaq Composite" },
+    { "symbol": "BTC-USD",  "label": "Bitcoin" },
+    { "symbol": "GC=F",     "label": "Gold Futures" },
+    { "symbol": "CL=F",     "label": "Crude Oil Futures" },
+    { "symbol": "EURUSD=X", "label": "EUR/USD" },
+    { "symbol": "^TNX",     "label": "10Y Treasury Yield" }
+  ],
+  "correlation_pairs": [
+    ["^GSPC", "^IXIC"],
+    ["GC=F", "^GSPC"],
+    ["CL=F", "GC=F"],
+    ["BTC-USD", "^GSPC"]
+  ]
+}

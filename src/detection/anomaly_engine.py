@@ -36,7 +36,11 @@ DATABASE_URL = os.getenv(
     "postgresql://postgres:password@localhost:5432/market_anomalies",
 )
 
-SYMBOLS = ["^GSPC", "^IXIC", "BTC-USD", "GC=F", "CL=F", "EURUSD=X", "^TNX"]
+# Universe (symbols) comes from config/universe.json — single source of
+# truth shared by every entry point. Edited only in that file.
+from src.universe import load_universe  # noqa: E402
+
+SYMBOLS: list[str] = list(load_universe().symbols)
 
 FEATURE_WINDOW = 100  # Rows to query per symbol
 

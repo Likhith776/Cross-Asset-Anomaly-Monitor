@@ -29,10 +29,11 @@ from src.backtest.data import align_panel, fetch_symbol_history
 from src.backtest.harness import replay_panel, score_trial
 from src.backtest.inject import DEFAULT_WARMUP, plant_anomalies
 from src.detection.pipeline import DetectionPipeline
+from src.universe import load_universe
 
 logger = logging.getLogger("backtest")
 
-SYMBOLS = ["^GSPC", "^IXIC", "BTC-USD", "GC=F", "CL=F", "EURUSD=X", "^TNX"]
+SYMBOLS = list(load_universe().symbols)
 ZSCORE_THRESHOLDS = [2.5, 3.0, 3.5]
 
 

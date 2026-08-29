@@ -204,6 +204,23 @@ Slim profile processes:
 
 Retention: `market_features` 30 days, `correlation_snapshots` 7 days.
 
+## Universe configuration (`config/universe.json`)
+
+The traded universe — symbols with human-readable labels, and the
+monitored correlation pairs — is defined in **one config file**,
+`config/universe.json`, loaded once at startup by every entry point:
+producer, consumers, scheduler, API, slim profile, live-site publisher,
+and the backtest harness. Adding or removing a symbol/pair is an edit
+to that file only — no code changes, no detector redeploy. The loader
+validates fail-fast (pairs must reference tracked symbols; duplicates
+and self-pairs are rejected) and the API and dashboards use the
+labels from it.
+
+The old `ASSETS` environment variable was never read by any code and
+has been removed from `.env.example`; `config/universe.json` replaces
+it. (Detector weights, thresholds, and the macro-calendar window are
+code-level constants — this file is only about *what* is tracked.)
+
 ## Pipeline health: Prometheus + Grafana (Docker profile only)
 
 The full stack ships with metrics and dashboards. Two extra services are

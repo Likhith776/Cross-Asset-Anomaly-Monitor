@@ -27,6 +27,7 @@ from datetime import datetime, timedelta, timezone
 from src.detection.anomaly_engine import SYMBOLS
 from src.producers.data_provider import MarketDataProvider
 from src.slim import SlimApp
+from src.universe import load_universe
 
 logger = logging.getLogger("livesite")
 
@@ -409,6 +410,7 @@ class LiveSite:
         generated_at = now.isoformat()
 
         latest_symbols = {}
+        labels = load_universe().labels
         for symbol in self.symbols:
             rows = [r for r in self.store.features if r.get("symbol") == symbol]
             if not rows:
@@ -421,6 +423,7 @@ class LiveSite:
                 "delayed" if age <= FRESHNESS["delayed"] else "stale"
             )
             latest_symbols[symbol] = {
+                "label": labels.get(symbol, symbol),
                 "price": last.get("price"),
                 "return_1m": last.get("return_1m"),
                 "return_5m": last.get("return_5m"),

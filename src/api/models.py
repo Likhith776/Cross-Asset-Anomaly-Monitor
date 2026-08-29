@@ -31,6 +31,10 @@ class MetaResponse(BaseModel):
 class AssetStatus(BaseModel):
     """Response for a single asset in GET /assets."""
     symbol: str
+    label: Optional[str] = Field(
+        None,
+        description="Human-readable name from config/universe.json.",
+    )
     price: Optional[float] = None
     z_score: Optional[float] = None
     ewma_vol: Optional[float] = None

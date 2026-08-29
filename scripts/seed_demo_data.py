@@ -29,13 +29,17 @@ import psycopg2
 from psycopg2.extras import execute_values
 from dotenv import load_dotenv
 
+sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
+
+from src.universe import load_universe  # noqa: E402
+
 load_dotenv()
 
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
 
-ASSETS = ["^GSPC", "BTC-USD", "GC=F", "CL=F", "EURUSD=X", "^TNX", "^IXIC"]
+ASSETS = list(load_universe().symbols)
 
 # Realistic starting prices (as of mid-2024 ranges)
 BASE_PRICES = {

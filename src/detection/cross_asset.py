@@ -44,12 +44,13 @@ class CrossAssetCorrelationDetector(BaseDetector):
     ):
         super().__init__(name=name, window_size=window_size, threshold=threshold)
         self.min_observations = min_observations
-        self.pairs = pairs or [
-            ("^GSPC", "^IXIC"),   # S&P 500 vs Nasdaq
-            ("GC=F", "^GSPC"),    # Gold vs S&P 500
-            ("CL=F", "GC=F"),     # Oil vs Gold
-            ("BTC-USD", "^GSPC"), # Bitcoin vs S&P 500
-        ]
+        if pairs is None:
+            # Monitored pairs come from config/universe.json (single
+            # source of truth); callers may still override explicitly.
+            from src.universe import load_universe
+
+            pairs = list(load_universe().pairs)
+        self.pairs = pairs
         self._corr_history: dict[tuple[str, str], list[float]] = {}
         self._history_window: int = 200
 
