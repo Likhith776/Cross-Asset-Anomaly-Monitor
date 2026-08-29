@@ -13,6 +13,7 @@ from typing import Any, Optional
 import numpy as np
 
 from src.detection.base import BaseDetector, AnomalyEvent
+from src.detection.joint import MultivariateJointDetector
 from src.detection.regime import REGIME_SCALE_FACTORS, VolatilityRegimeTracker
 from src.detection.zscore import ZScoreDetector
 from src.detection.isolation_forest import IsolationForestDetector
@@ -71,6 +72,12 @@ class DetectionPipeline:
                 window_size=100,
                 threshold=2.5,
                 min_observations=50,
+            ),
+            MultivariateJointDetector(
+                name="joint_mahalanobis",
+                threshold=3.0,
+                min_observations=50,
+                window_size=100,
             ),
         ]
         logger.info(
