@@ -37,6 +37,14 @@ HISTORY_CAP_PER_SYMBOL = 2000   # ~40 days at a 30-min cadence
 ANOMALIES_CAP = 500
 CHART_MAX_POINTS = 600
 FRESHNESS = {"live": 120, "delayed": 900}  # seconds -> classification bounds
+# Incident log: trailing window of published anomalies, most recent first.
+INCIDENT_RETENTION_DAYS = 60
+INCIDENT_TYPES = (
+    "zscore_spike",
+    "isolation_forest_outlier",
+    "correlation_break",
+    "joint_mahalanobis",
+)
 
 SCHEMA_VERSION = 1
 
@@ -403,6 +411,82 @@ class LiveSite:
         """Structured lead-lag from the '[lead-lag: ...]' marker."""
         return extract_lead_lag(description)
 
+    @staticmethod
+    def _parse_type_detector(description: str) -> tuple[Optional[str], Optional[str]]:
+        """
+        (anomaly type, detector name) from a stored description.
+
+        Tick-level records carry both explicitly
+        ("Tick-level zscore_spike (zscore_price detector), ...");
+        batch-composite records only describe their clauses, so the
+        type is matched case-insensitively against the known types and
+        the detector is reported as the composite engine.
+        """
+        desc = description or ""
+        # Normalize case and the hyphen/space/underscore differences
+        # between the tick-level and batch-composite description formats.
+        flat = re.sub(r"[-_ ]", "", desc.lower())
+        for known in INCIDENT_TYPES:
+            if known.replace("_", "") in flat:
+                m = re.search(r"\((\S+ detector)\)", desc)
+                detector = m.group(1) if m else (
+                    "batch_composite" if "Tick-level" not in desc else None
+                )
+                return known, detector
+        return None, None
+
+    def _enriched_events(self, cutoff: Optional[datetime] = None) -> list[dict]:
+        """
+        Published anomaly events with every annotation layer extracted
+        (severity, regime, lead-lag, macro, LLM explanation, type,
+        detector), newest first. Shared by anomalies.json and the
+        incident log so the two surfaces can never disagree.
+        """
+        events = []
+        for e in self.store.anomalies[:200]:
+            description = e.get("description", "")
+            ts = e.get("timestamp")
+            if cutoff is not None:
+                try:
+                    event_dt = datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+                except (TypeError, ValueError):
+                    continue
+                if event_dt < cutoff:
+                    continue
+            anomaly_type, detector = self._parse_type_detector(description)
+            events.append({
+                **{k: e.get(k) for k in ("timestamp", "symbol", "score", "description")},
+                "type": anomaly_type,
+                "detector": detector,
+                "severity": self._extract_severity(description),
+                "regime": self._extract_regime(description),
+                "lead_lag": self._extract_lead_lag(description),
+                "macro_context": e.get("macro_context"),
+                "llm_explanation": e.get("llm_explanation"),
+            })
+        return events
+
+    def _write_incident_log(self, generated_at: str) -> None:
+        """
+        Human-readable incident log: every published anomaly within the
+        retention window (INCIDENT_RETENTION_DAYS), most recent first,
+        rendered as a static page + structured JSON next to the
+        dashboard's data.
+        """
+        cutoff = datetime.now(timezone.utc) - timedelta(days=INCIDENT_RETENTION_DAYS)
+        incidents = [
+            e for e in self._enriched_events(cutoff=cutoff)
+        ]
+        payload = {
+            "schema": SCHEMA_VERSION,
+            "generated_at": generated_at,
+            "retention_days": INCIDENT_RETENTION_DAYS,
+            "incidents": incidents,
+        }
+        self._write_json(
+            os.path.join(self.out_dir, "data", "incidents.json"), payload
+        )
+
     # ------------------------------------------------------------------
     # Run one cycle and publish artifacts
     # ------------------------------------------------------------------
@@ -461,19 +545,14 @@ class LiveSite:
             {"schema": SCHEMA_VERSION, "generated_at": generated_at,
              "symbols": latest_symbols},
         )
+        # Shared enrichment feeds both anomalies.json and the incident log.
+        enriched = self._enriched_events()
         self._write_json(
             os.path.join(self.out_dir, "data", "anomalies.json"),
             {"schema": SCHEMA_VERSION, "generated_at": generated_at,
-             "events": [
-                 {**{k: e.get(k) for k in ("timestamp", "symbol", "score", "description")},
-                  "severity": self._extract_severity(e.get("description", "")),
-                  "regime": self._extract_regime(e.get("description", "")),
-                  "lead_lag": self._extract_lead_lag(e.get("description", "")),
-                  "macro_context": e.get("macro_context"),
-                  "llm_explanation": e.get("llm_explanation")}
-                 for e in self.store.anomalies[:200]
-             ]},
+             "events": enriched[:200]},
         )
+        self._write_incident_log(generated_at)
 
         # Correlations: most recent snapshot as a matrix + history tail
         # so the timeline can show correlation drift over time.
@@ -558,17 +637,17 @@ class LiveSite:
                 },
             )
 
-        # Copy the static dashboard next to the data.
-        template = os.path.join(
+        # Copy the static pages (dashboard + incident log) next to the data.
+        site_dir = os.path.join(
             os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-            "site", "index.html",
+            "site",
         )
-        with open(template, encoding="utf-8") as src:
-            html = src.read()
-        out_index = os.path.join(self.out_dir, "index.html")
         os.makedirs(self.out_dir, exist_ok=True)
-        with open(out_index, "w", encoding="utf-8") as dst:
-            dst.write(html)
+        for page in ("index.html", "incidents.html"):
+            with open(os.path.join(site_dir, page), encoding="utf-8") as src_fh:
+                html = src_fh.read()
+            with open(os.path.join(self.out_dir, page), "w", encoding="utf-8") as dst:
+                dst.write(html)
 
         open(os.path.join(self.out_dir, ".nojekyll"), "w").close()
         logger.info("[LIVE] artifacts written to %s", self.out_dir)

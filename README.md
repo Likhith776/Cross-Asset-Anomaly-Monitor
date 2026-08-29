@@ -4,6 +4,13 @@ Real-time anomaly detection across 7 asset classes — equities (S&P 500,
 Nasdaq), crypto (BTC), commodities (gold, crude oil), FX (EUR/USD), and
 rates (10Y Treasury yield) — with a live Streamlit dashboard.
 
+**🚨 Live incident log** — every real anomaly the deployed system has
+caught, with severity, regime, macro/lead-lag context and LLM
+explanations:
+**https://likhith776.github.io/Cross-Asset-Anomaly-Monitor/incidents.html**
+(regenerated every 30 minutes by CI; see
+[`docs/DATA_CONTRACT.md`](docs/DATA_CONTRACT.md)).
+
 The system ships in two deployment profiles built on the same detection
 core:
 
@@ -328,6 +335,7 @@ Pages. No server, no database, no card, and no dependence on any
 personal machine being on.
 
 - **Live URL**: `https://likhith776.github.io/cross-asset-anomaly-monitor/`
+- **Incident log**: `https://likhith776.github.io/cross-asset-anomaly-monitor/incidents.html` — the shareable, human-readable record of caught anomalies
 - **Cadence**: every 30 minutes (`LIVE` workflow; also runs on every push)
 - **Data contract**: [`docs/DATA_CONTRACT.md`](docs/DATA_CONTRACT.md) —
   the JSON schemas the dashboard (and the upcoming UI revamp) consume

@@ -161,6 +161,52 @@ isolation_forest_outlier → `iforest`, correlation_break →
 `correlation`; anything else → `unknown`), shared by both surfaces via
 `src/precision.py`.
 
+## `data/incidents.json` + `incidents.html`
+
+The **incident log** — the most visible, shareable artifact of the
+system. Served at `incidents.html` (linked from the dashboard header)
+with its structured data at `data/incidents.json`.
+
+`incidents.json` is the published anomaly list filtered to a trailing
+**60-day retention window** (`retention_days` field; chosen so the log
+stays bounded and current — older incidents age out of the page, while
+the underlying `state/anomalies.json` retains up to 500 events for the
+precision pipeline). Each incident enriches the corresponding
+`anomalies.json` event with parsed type/detector fields; optional
+context fields are omitted entirely when absent (never null/blank
+placeholders):
+
+```json
+{
+  "schema": 1,
+  "generated_at": "...",
+  "retention_days": 60,
+  "incidents": [
+    {
+      "timestamp": "2026-08-26T09:59:12+00:00",
+      "symbol": "BTC-USD",
+      "score": 1.0,
+      "description": "Tick-level isolation_forest_outlier ... — critical severity",
+      "type": "isolation_forest_outlier",
+      "detector": "iforest_price detector",
+      "severity": "critical",
+      "regime": "high",
+      "lead_lag": {"leader": "GC=F", "lag_ticks": 2, "correlation": 0.71},
+      "macro_context": "FOMC rate decision",
+      "llm_explanation": "BTC rose 4.2% while SPX fell 0.6% — a broad risk-off move."
+    }
+  ]
+}
+```
+
+`type`/`detector` are parsed from the stored description: tick-level
+records carry both explicitly; batch-composite records are reported as
+type/detector `batch_composite` with the detector clauses in the
+description. Anomalies missing optional context simply omit the
+corresponding fields. `incidents.html` renders these entries
+most-recent-first with severity-colored borders and links back to the
+live dashboard.
+
 ## `data/charts/{symbol}.json`
 
 Downsampled close-price series per symbol (≤600 points, endpoints kept).

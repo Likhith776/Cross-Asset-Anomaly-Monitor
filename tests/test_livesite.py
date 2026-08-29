@@ -153,3 +153,99 @@ def test_history_cap_enforced(tmp_path):
     saved = json.loads((tmp_path / "o" / "state" / "history.json").read_text())
     test_rows = [r for r in saved["features"] if r["symbol"] == "TEST-X"]
     assert len(test_rows) <= HISTORY_CAP_PER_SYMBOL
+
+
+# ---------------------------------------------------------------------------
+# Incident log (incidents.json + incidents.html)
+
+def _label_and_publish(tmp_path, seed, macro=None, llm=None, lead_lag_marker=None):
+    """Detect a spike on TEST-X, optionally annotate it, publish once."""
+    import json as _json
+    from datetime import timedelta
+
+    prices = [100.0 + i * 0.01 for i in range(30)]
+    site = run_cycle(tmp_path, [[quote(float(p)) for p in prices]], carry=True)
+
+    assert site.store.anomalies, "expected the ramp+spike to produce an event"
+    entry = site.store.anomalies[0]
+    if macro:
+        entry["macro_context"] = macro
+    if llm:
+        entry["llm_explanation"] = llm
+    if lead_lag_marker:
+        entry["description"] += lead_lag_marker
+    site.save_state()
+    site.build_artifacts()
+    return site
+
+
+def test_incident_log_includes_all_optional_fields(tmp_path):
+    from datetime import datetime, timezone
+
+    site = _label_and_publish(
+        tmp_path, seed=7, macro="FOMC rate decision",
+        llm="BTC rose while SPX fell — a broad risk-off move.",
+        lead_lag_marker=" [lead-lag: led by GC=F (2 ticks, r=0.71)]",
+    )
+    data = json.loads((tmp_path / "build" / "data" / "incidents.json").read_text())
+
+    assert data["schema"] == 1
+    assert data["retention_days"] == 60
+    assert data["incidents"], "expected at least one incident"
+    incident = data["incidents"][0]
+    assert incident["symbol"] == "TEST-X"
+    assert incident["severity"] in ("low", "medium", "high", "critical")
+    assert incident["macro_context"] == "FOMC rate decision"
+    assert incident["llm_explanation"] == "BTC rose while SPX fell — a broad risk-off move."
+    assert incident["lead_lag"]["leader"] == "GC=F"
+    assert incident["lead_lag"]["lag_ticks"] == 2
+    # HTML page copied next to the data
+    assert (tmp_path / "build" / "incidents.html").exists()
+
+
+def test_incident_log_omits_absent_optional_fields(tmp_path):
+    prices = [100.0 + i * 0.01 for i in range(30)]
+    run_cycle(tmp_path, [[quote(float(p)) for p in prices]])
+
+    data = json.loads((tmp_path / "build" / "data" / "incidents.json").read_text())
+    assert data["incidents"], "expected at least one incident"
+    for incident in data["incidents"]:
+        # Optional context that never fired must be omitted, not null/blank
+        assert "macro_context" not in incident or not incident["macro_context"]
+        assert "llm_explanation" not in incident or not incident["llm_explanation"]
+        assert incident.get("lead_lag") is None
+        assert incident["description"]           # required field always present
+
+
+def test_incident_log_respects_retention_window(tmp_path):
+    from datetime import timedelta
+
+    old_prices = [100.0 + i * 0.01 for i in range(30)]
+    site = run_cycle(tmp_path, [[quote(float(p)) for p in old_prices]], carry=True)
+
+    # Backdate every stored anomaly beyond the 60-day retention window.
+    for e in site.store.anomalies:
+        ts = datetime.fromisoformat(e["timestamp"]) - timedelta(days=90)
+        e["timestamp"] = ts.isoformat()
+    site.save_state()
+    site.build_artifacts()
+
+    data = json.loads((tmp_path / "build" / "data" / "incidents.json").read_text())
+    # The stale incident is dropped, but the underlying state keeps it
+    # (save_state re-published the backdated timestamps).
+    assert data["incidents"] == []
+    assert json.loads(
+        (tmp_path / "build" / "state" / "anomalies.json").read_text()
+    )["events"]          # state retention is independent of the log window
+
+
+def test_incident_log_reuses_harness_scoring_fields(tmp_path):
+    """The incident entries must carry the same enrichment the
+    anomalies.json feed publishes (single enriched source)."""
+    prices = [100.0 + i * 0.01 for i in range(30)]
+    run_cycle(tmp_path, [[quote(float(p)) for p in prices]])
+
+    incidents = json.loads((tmp_path / "build" / "data" / "incidents.json").read_text())
+    anomalies = json.loads((tmp_path / "build" / "data" / "anomalies.json").read_text())
+
+    assert incidents["incidents"] == anomalies["events"][:len(incidents["incidents"])]
