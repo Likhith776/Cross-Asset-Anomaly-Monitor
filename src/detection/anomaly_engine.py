@@ -25,6 +25,11 @@ import psycopg2
 from psycopg2.extras import execute_values
 from dotenv import load_dotenv
 
+from src.detection.explain import (
+    EXPLAIN_MIN_SCORE,
+    build_snapshot_from_features,
+    explain_from_env,
+)
 from src.detection.lead_lag import augment_description, lead_lag_for
 from src.detection.regime import (
     REGIME_MEDIUM,
@@ -247,12 +252,13 @@ def insert_anomaly_events(
             e["pca_flag"],
             description,
             macro["name"] if macro else None,
+            e.get("llm_explanation"),
         ))
 
     sql = """
         INSERT INTO anomaly_events
             (timestamp, symbol, anomaly_score, z_flag, ewma_flag, pca_flag,
-             description, macro_context)
+             description, macro_context, llm_explanation)
         VALUES %s
     """
     execute_values(cur, sql, rows, page_size=50)
@@ -701,6 +707,30 @@ def run_detection(db_conn: Any) -> list[dict[str, Any]]:
                 if lead_lag:
                     description = augment_description(description, lead_lag)
 
+                # Optional LLM explanation (high-severity only; null when
+                # off, budget-exhausted, or failed — never blocks the
+                # anomaly from being recorded).
+                explanation = None
+                if result["anomaly_score"] >= EXPLAIN_MIN_SCORE:
+                    snapshot = build_snapshot_from_features(
+                        features_by_symbol,
+                        pairs=load_universe().pairs,
+                        lead_lag=lead_lag,
+                        macro_event=macro_event_for(
+                            result["timestamp"] or run_timestamp
+                        ),
+                    )
+                    explanation = explain_from_env(
+                        {
+                            "symbol": result["symbol"],
+                            "type": "batch_composite",
+                            "score": result["anomaly_score"],
+                            "price": result.get("price"),
+                            "description": description,
+                        },
+                        snapshot,
+                    )
+
                 events_to_insert.append({
                     "timestamp": result["timestamp"] or run_timestamp,
                     "symbol": result["symbol"],
@@ -709,6 +739,7 @@ def run_detection(db_conn: Any) -> list[dict[str, Any]]:
                     "ewma_flag": result["ewma_flag"],
                     "pca_flag": result["pca_flag"],
                     "description": description,
+                    "llm_explanation": explanation,
                 })
 
         # --- Suppress sustained anomalies (cooldown / escalation) ---

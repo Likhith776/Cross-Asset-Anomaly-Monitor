@@ -375,13 +375,14 @@ class LiveSite:
         return None, None
 
     def _persist_anomaly(self, params: tuple) -> None:
-        ts, symbol, score, z, ewma, pca, description, macro_context = params
+        ts, symbol, score, z, ewma, pca, description, macro_context, llm_explanation = params
         self.store.anomalies.insert(0, {
             "timestamp": ts.isoformat() if hasattr(ts, "isoformat") else str(ts),
             "symbol": symbol,
             "score": float(score),
             "description": description,
             "macro_context": macro_context,
+            "llm_explanation": llm_explanation,
         })
         del self.store.anomalies[ANOMALIES_CAP:]
 
@@ -468,7 +469,8 @@ class LiveSite:
                   "severity": self._extract_severity(e.get("description", "")),
                   "regime": self._extract_regime(e.get("description", "")),
                   "lead_lag": self._extract_lead_lag(e.get("description", "")),
-                  "macro_context": e.get("macro_context")}
+                  "macro_context": e.get("macro_context"),
+                  "llm_explanation": e.get("llm_explanation")}
                  for e in self.store.anomalies[:200]
              ]},
         )

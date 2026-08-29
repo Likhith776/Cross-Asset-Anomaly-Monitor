@@ -173,6 +173,7 @@ def test_livesite_persist_carries_macro_context(calendar):
             True, False, False,
             "Tick-level zscore_spike — high severity [macro: FOMC rate decision ±3m]",
             "FOMC rate decision",
+            None,  # llm_explanation (feature off in tests)
         )
     )
     assert site.store.anomalies[0]["macro_context"] == "FOMC rate decision"

@@ -65,6 +65,13 @@ class AnomalyEventResponse(BaseModel):
         description="Scheduled macro release (FOMC/CPI/NFP/...) the anomaly "
                     "coincided with, when within the annotation window.",
     )
+    llm_explanation: Optional[str] = Field(
+        None,
+        description="Optional 1-2 sentence LLM-generated explanation of the "
+                    "anomaly in its cross-asset context. Null when the "
+                    "feature is off, the budget is exhausted, or generation "
+                    "failed.",
+    )
 
     model_config = {"from_attributes": True}
 

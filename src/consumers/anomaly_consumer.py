@@ -27,6 +27,7 @@ from sqlalchemy import text
 from src.api.database import AnomalyEvent, async_session_factory
 from src.consumers.base import BaseConsumer
 from src.detection.anomaly_engine import SYMBOLS, should_insert_event
+from src.detection.explain import build_snapshot_from_pipeline, explain_from_env
 from src.detection.lead_lag import augment_description as augment_lead_lag
 from src.detection.lead_lag import lead_lag_for
 from src.detection.macro_calendar import augment_description, macro_event_for
@@ -194,6 +195,18 @@ class AnomalyConsumer(BaseConsumer):
                     if lead_lag:
                         description = augment_lead_lag(description, lead_lag)
 
+                    # Optional LLM explanation (high-severity only; null
+                    # when off, budget-exhausted, or failed — never blocks
+                    # the anomaly from being recorded).
+                    explanation = explain_from_env(
+                        anomaly,
+                        build_snapshot_from_pipeline(
+                            self.pipeline, lead_lag=lead_lag, macro_event=macro
+                        ),
+                    )
+                    if explanation:
+                        description += f" [explanation: {explanation}]"
+
                     session.add(AnomalyEvent(
                         timestamp=timestamp,
                         symbol=symbol,
@@ -203,6 +216,7 @@ class AnomalyConsumer(BaseConsumer):
                         pca_flag=flags["pca_flag"],
                         description=description,
                         macro_context=macro["name"] if macro else None,
+                        llm_explanation=explanation,
                     ))
                     logger.warning(
                         "[ANOMALY] %s score=%.3f type=%s severity=%s",

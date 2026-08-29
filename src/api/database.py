@@ -106,6 +106,7 @@ class AnomalyEvent(Base):
     pca_flag: Mapped[bool] = mapped_column(Boolean, default=False)
     description: Mapped[Optional[str]] = mapped_column(Text)
     macro_context: Mapped[Optional[str]] = mapped_column(String(120))
+    llm_explanation: Mapped[Optional[str]] = mapped_column(Text)
     created_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True))
 
     __table_args__ = (

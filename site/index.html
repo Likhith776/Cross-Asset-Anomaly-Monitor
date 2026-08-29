@@ -420,7 +420,7 @@ async function loadAlerts() {
       <td><span class="sev-${e.severity || "low"}">${e.severity || "low"}</span></td>
       <td>${fmt(e.score, 3)}</td>
       <td>${labelCell}</td>
-      <td>${e.description || ""}</td>
+      <td>${e.description || ""}${e.llm_explanation ? `<br><span style="color:#58a6ff;font-size:11px">📝 ${e.llm_explanation}</span>` : ""}</td>
     </tr>`;
   }).join("") ||
     `<tr><td colspan="6" class="empty">No alerts match the current filters.</td></tr>`;

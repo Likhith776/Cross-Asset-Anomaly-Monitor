@@ -750,6 +750,7 @@ if anomalies:
             a.get("pca_flag", False),
         )
         a_desc = (a.get("description") or "")[:120]
+        a_expl = (a.get("llm_explanation") or "").strip()
 
         row_cols = st.columns([1.4, 1.0, 0.7, 1.0, 3.0, 1.4])
         row_cols[0].markdown(
@@ -774,8 +775,12 @@ if anomalies:
             f"<span style='font-size:12px;color:var(--muted,#8b98a5)'>{a_signals}</span>",
             unsafe_allow_html=True,
         )
+        expl_html = (
+            f"<br><span style='font-size:11px;color:#58a6ff'>📝 {a_expl}</span>"
+            if a_expl else ""
+        )
         row_cols[4].markdown(
-            f"<span style='font-size:12px'>{a_desc}</span>",
+            f"<span style='font-size:12px'>{a_desc}</span>{expl_html}",
             unsafe_allow_html=True,
         )
         if a_id is None:

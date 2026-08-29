@@ -80,6 +80,7 @@ from src.consumers.feature_consumer import (
     warm_start as warm_windows,
 )
 from src.detection.anomaly_engine import ANOMALY_COOLDOWN_MINUTES, SYMBOLS, should_insert_event
+from src.detection.explain import build_snapshot_from_pipeline, explain_from_env
 from src.detection.lead_lag import augment_description as augment_lead_lag
 from src.detection.lead_lag import lead_lag_for
 from src.detection.macro_calendar import augment_description, macro_event_for
@@ -215,6 +216,17 @@ class SlimApp:
             if lead_lag:
                 description = augment_lead_lag(description, lead_lag)
 
+            # Optional LLM explanation (high-severity only; null when off,
+            # budget-exhausted, or failed — never blocks the record).
+            explanation = explain_from_env(
+                anomaly,
+                build_snapshot_from_pipeline(
+                    self.pipeline, lead_lag=lead_lag, macro_event=macro
+                ),
+            )
+            if explanation:
+                description += f" [explanation: {explanation}]"
+
             self._persist_anomaly(
                 (
                     ts,
@@ -225,6 +237,7 @@ class SlimApp:
                     flags["pca_flag"],
                     description,
                     macro["name"] if macro else None,
+                    explanation,
                 )
             )
             logger.warning(
@@ -260,8 +273,9 @@ class SlimApp:
         sql = """
             INSERT INTO anomaly_events
                 (timestamp, symbol, anomaly_score,
-                 z_flag, ewma_flag, pca_flag, description, macro_context)
-            VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+                 z_flag, ewma_flag, pca_flag, description, macro_context,
+                 llm_explanation)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s)
         """
         with self.writer._conn.cursor() as cur:
             cur.execute(sql, params)
