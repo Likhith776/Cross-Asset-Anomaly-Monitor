@@ -202,6 +202,11 @@ class SlimApp:
             if macro:
                 description = augment_description(description, ts)
 
+            # Volatility regime at fire time, recorded for later review.
+            regime = anomaly.get("metadata", {}).get("regime")
+            if regime:
+                description += f" [regime: {regime}]"
+
             self._persist_anomaly(
                 (
                     ts,

@@ -55,9 +55,12 @@ class ZScoreDetector(BaseDetector):
 
         z_score = abs((price - mean) / std)
 
-        if z_score >= self.threshold:
-            # Normalize score to 0-1 range for consistency across detectors
-            normalized_score = min(z_score / (self.threshold * 2), 1.0)
+        # Regime-scaled threshold: widened in high-vol, tightened in low-vol.
+        threshold = self.effective_threshold(asset)
+
+        if z_score >= threshold:
+            # Normalize score to [0, 1] for consistency across detectors
+            normalized_score = min(z_score / (threshold * 2), 1.0)
             severity = self._classify_severity(normalized_score)
 
             return AnomalyEvent(
@@ -73,6 +76,8 @@ class ZScoreDetector(BaseDetector):
                     "rolling_mean": round(mean, 4),
                     "rolling_std": round(std, 4),
                     "window_size": len(window),
+                    "threshold": round(threshold, 4),
+                    "regime": self.current_regime(asset),
                 },
             )
 

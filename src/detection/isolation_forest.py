@@ -118,12 +118,13 @@ class IsolationForestDetector(BaseDetector):
                 score=normalized_score,
                 type="isolation_forest_outlier",
                 severity=severity,
-                metadata={
-                    "detector": self.name,
-                    "raw_score": round(float(last_score), 4),
-                    "window_size": len(window),
-                    "observation_count": obs_count,
-                },
+                    metadata={
+                        "detector": self.name,
+                        "raw_score": round(float(last_score), 4),
+                        "window_size": len(window),
+                        "observation_count": obs_count,
+                        "regime": self.current_regime(asset),
+                    },
             )
 
         return None

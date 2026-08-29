@@ -25,6 +25,12 @@ import psycopg2
 from psycopg2.extras import execute_values
 from dotenv import load_dotenv
 
+from src.detection.regime import (
+    REGIME_MEDIUM,
+    classify_vol_percentile,
+    scale_for_regime,
+)
+
 # ---------------------------------------------------------------------------
 # Configuration
 # ---------------------------------------------------------------------------
@@ -264,6 +270,7 @@ def insert_anomaly_events(
 
 def detect_z_score(
     features: list[dict[str, Any]],
+    threshold: float = Z_SCORE_THRESHOLD,
 ) -> tuple[bool, float]:
     """
     Detector 1 — Z-Score Spike (weight 0.35).
@@ -286,13 +293,14 @@ def detect_z_score(
     except (TypeError, ValueError):
         return False, 0.0
 
-    flag = abs(z_val) > Z_SCORE_THRESHOLD
+    flag = abs(z_val) > threshold
     raw_signal = min(abs(z_val) / Z_SCORE_NORMALIZER, 1.0)
     return flag, round(raw_signal, 6)
 
 
 def detect_ewma_volatility(
     features: list[dict[str, Any]],
+    multiplier: float = EWMA_MULTIPLIER,
 ) -> tuple[bool, float]:
     """
     Detector 2 — EWMA Volatility Spike (weight 0.35).
@@ -336,13 +344,14 @@ def detect_ewma_volatility(
             return True, min(current / 0.001, 1.0)  # Treat as extreme
         return False, 0.0
 
-    flag = current > (EWMA_MULTIPLIER * baseline)
+    flag = current > (multiplier * baseline)
     raw_signal = min(current / (baseline * EWMA_NORMALIZER), 1.0)
     return flag, round(raw_signal, 6)
 
 
 def detect_pca_residual(
     features: list[dict[str, Any]],
+    threshold: float = PCA_Z_THRESHOLD,
 ) -> tuple[bool, float]:
     """
     Detector 3 — PCA Residual (weight 0.30).
@@ -391,7 +400,7 @@ def detect_pca_residual(
         return False, 0.0
 
     z_pca = (current - rolling_mean) / rolling_std
-    flag = abs(z_pca) > PCA_Z_THRESHOLD
+    flag = abs(z_pca) > threshold
     raw_signal = min(abs(z_pca) / PCA_NORMALIZER, 1.0)
     return flag, round(raw_signal, 6)
 
@@ -468,18 +477,30 @@ def build_description(
 # Core Detection Logic
 # ---------------------------------------------------------------------------
 
-def score_symbol(features: list[dict[str, Any]]) -> dict[str, Any]:
+def score_symbol(
+    features: list[dict[str, Any]],
+    regime: str = REGIME_MEDIUM,
+) -> dict[str, Any]:
     """
     Run all three detectors on a symbol's feature window and compute
     the weighted composite anomaly score.
 
-    Returns a result dict with all intermediate values for logging
-    and the final score/flags for event insertion decisions.
+    `regime` scales each detector's threshold via REGIME_SCALE_FACTORS
+    (wider thresholds in high-vol regimes). The regime is recorded in
+    the result so stored anomalies are self-explanatory.
     """
-    # Run detectors
-    z_flag, z_signal = detect_z_score(features)
-    ewma_flag, ewma_signal = detect_ewma_volatility(features)
-    pca_flag, pca_signal = detect_pca_residual(features)
+    scale = scale_for_regime(regime)
+
+    # Run detectors with regime-scaled thresholds
+    z_flag, z_signal = detect_z_score(
+        features, threshold=Z_SCORE_THRESHOLD * scale
+    )
+    ewma_flag, ewma_signal = detect_ewma_volatility(
+        features, multiplier=EWMA_MULTIPLIER * scale
+    )
+    pca_flag, pca_signal = detect_pca_residual(
+        features, threshold=PCA_Z_THRESHOLD * scale
+    )
 
     # Composite score
     anomaly_score = round(
@@ -550,6 +571,7 @@ def score_symbol(features: list[dict[str, Any]]) -> dict[str, Any]:
         "pca_signal": pca_signal,
         "anomaly_score": anomaly_score,
         "description": description,
+        "regime": regime,
     }
 
 
@@ -620,26 +642,42 @@ def run_detection(db_conn: Any) -> list[dict[str, Any]]:
                 features[-1].get("timestamp"),
             )
 
-            # Score
-            result = score_symbol(features)
+            # Volatility regime: current EWMA vol percentile within its
+            # own trailing distribution (the fetched feature window).
+            vol_series = [
+                float(f["ewma_vol"])
+                for f in features
+                if f.get("ewma_vol") is not None
+            ]
+            current_vol = vol_series[-1] if vol_series else None
+            regime = (
+                classify_vol_percentile(current_vol, vol_series[:-1])
+                if current_vol is not None
+                else REGIME_MEDIUM
+            )
+
+            # Score (thresholds scaled by regime)
+            result = score_symbol(features, regime=regime)
             results.append(result)
 
-            # Log per-symbol result
+            # Log per-symbol result — regime is observable here by design
             flags_str = (
                 f"Z={'ON' if result['z_flag'] else 'off'} "
                 f"EWMA={'ON' if result['ewma_flag'] else 'off'} "
                 f"PCA={'ON' if result['pca_flag'] else 'off'}"
             )
             logger.info(
-                "[DETECT] %s score=%.3f [%s] — %s",
+                "[DETECT] %s score=%.3f regime=%s [%s] — %s",
                 symbol,
                 result["anomaly_score"],
+                regime,
                 flags_str,
                 result["description"],
             )
 
             # Queue for insertion if above threshold
             if result["anomaly_score"] > SCORE_INSERT_THRESHOLD:
+                description = result["description"] + f" [regime: {regime}]"
                 events_to_insert.append({
                     "timestamp": result["timestamp"] or run_timestamp,
                     "symbol": result["symbol"],
@@ -647,7 +685,7 @@ def run_detection(db_conn: Any) -> list[dict[str, Any]]:
                     "z_flag": result["z_flag"],
                     "ewma_flag": result["ewma_flag"],
                     "pca_flag": result["pca_flag"],
-                    "description": result["description"],
+                    "description": description,
                 })
 
         # --- Suppress sustained anomalies (cooldown / escalation) ---

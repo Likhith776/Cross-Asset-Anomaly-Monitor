@@ -13,6 +13,7 @@ from typing import Any, Optional
 import numpy as np
 
 from src.detection.base import BaseDetector, AnomalyEvent
+from src.detection.regime import REGIME_SCALE_FACTORS, VolatilityRegimeTracker
 from src.detection.zscore import ZScoreDetector
 from src.detection.isolation_forest import IsolationForestDetector
 from src.detection.cross_asset import CrossAssetCorrelationDetector
@@ -37,6 +38,10 @@ class DetectionPipeline:
     def __init__(self, aggregate: bool = True):
         self.aggregate = aggregate
         self.detectors: list[BaseDetector] = []
+        # Volatility-regime tracker: classifies each symbol's current
+        # regime from its own rolling vol; detectors' thresholds are
+        # scaled by REGIME_SCALE_FACTORS[regime] every tick.
+        self.regime_tracker = VolatilityRegimeTracker()
         self._setup_default_detectors()
 
     def _setup_default_detectors(self) -> None:
@@ -205,6 +210,14 @@ class DetectionPipeline:
             one entry (the highest-scoring anomaly).
         """
         anomalies: list[AnomalyEvent] = []
+
+        # Classify the symbol's volatility regime and scale every
+        # detector's threshold accordingly before running them.
+        regime = self.regime_tracker.observe(asset, price)
+        scale = REGIME_SCALE_FACTORS[regime]
+        for detector in self.detectors:
+            detector.regime_scale[asset] = scale
+            detector.regime_by_asset[asset] = regime
 
         for detector in self.detectors:
             started = time.perf_counter()

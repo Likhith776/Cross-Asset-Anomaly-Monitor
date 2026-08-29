@@ -274,6 +274,7 @@ async def get_assets(session: AsyncSession = Depends(get_session)):
         if not records:
             response.append(AssetStatus(
                 symbol=symbol,
+                regime="unknown",
                 composite_score=0.0,
                 risk_level="low",
             ))
@@ -291,6 +292,19 @@ async def get_assets(session: AsyncSession = Depends(get_session)):
             if r.get("pca_residual") is not None
         ]
 
+        # Volatility regime: current EWMA vol percentile within its own
+        # trailing distribution (same classifier the detectors scale by).
+        from src.detection.regime import classify_vol_percentile
+
+        latest_ewma = latest.get("ewma_vol")
+        regime = (
+            classify_vol_percentile(
+                float(latest_ewma), [float(v) for v in ewma_history]
+            )
+            if latest_ewma is not None
+            else "unknown"
+        )
+
         # Compute composite score
         score = compute_composite_score(
             z_score=latest.get("z_score"),
@@ -304,6 +318,7 @@ async def get_assets(session: AsyncSession = Depends(get_session)):
             symbol=symbol,
             label=SYMBOL_LABELS.get(symbol),
             price=latest.get("price"),
+            regime=regime,
             z_score=latest.get("z_score"),
             ewma_vol=latest.get("ewma_vol"),
             pca_residual=latest.get("pca_residual"),

@@ -35,6 +35,11 @@ class AssetStatus(BaseModel):
         None,
         description="Human-readable name from config/universe.json.",
     )
+    regime: Optional[str] = Field(
+        None,
+        description="Volatility regime: low | medium | high (unknown "
+                    "when there is no vol history).",
+    )
     price: Optional[float] = None
     z_score: Optional[float] = None
     ewma_vol: Optional[float] = None

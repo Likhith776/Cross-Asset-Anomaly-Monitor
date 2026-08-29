@@ -389,6 +389,12 @@ class LiveSite:
         m = re.search(r"—\s+(\w+)\s+severity", description or "")
         return m.group(1) if m else "low"
 
+    @staticmethod
+    def _extract_regime(description: str) -> Optional[str]:
+        """Pull the volatility regime from a '[regime: X]' marker."""
+        m = re.search(r"\[regime:\s*(\w+)\]", description or "")
+        return m.group(1) if m else None
+
     # ------------------------------------------------------------------
     # Run one cycle and publish artifacts
     # ------------------------------------------------------------------
@@ -411,6 +417,11 @@ class LiveSite:
 
         latest_symbols = {}
         labels = load_universe().labels
+        tracker = self.app.pipeline.regime_tracker
+
+        def site_regime(symbol: str) -> str:
+            return tracker.current_regime(symbol)
+
         for symbol in self.symbols:
             rows = [r for r in self.store.features if r.get("symbol") == symbol]
             if not rows:
@@ -425,6 +436,9 @@ class LiveSite:
             latest_symbols[symbol] = {
                 "label": labels.get(symbol, symbol),
                 "price": last.get("price"),
+                # Current volatility regime from the pipeline's tracker
+                # (visible proof the regime classifier is running).
+                "regime": site_regime(symbol),
                 "return_1m": last.get("return_1m"),
                 "return_5m": last.get("return_5m"),
                 "volume": last.get("volume"),
@@ -445,6 +459,7 @@ class LiveSite:
              "events": [
                  {**{k: e.get(k) for k in ("timestamp", "symbol", "score", "description")},
                   "severity": self._extract_severity(e.get("description", "")),
+                  "regime": self._extract_regime(e.get("description", "")),
                   "macro_context": e.get("macro_context")}
                  for e in self.store.anomalies[:200]
              ]},

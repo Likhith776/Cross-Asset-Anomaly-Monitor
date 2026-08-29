@@ -42,6 +42,19 @@ class BaseDetector(ABC):
         self.window_size = window_size
         self.threshold = threshold
         self._price_windows: dict[str, list[float]] = {}
+        # Volatility-regime hooks: the owning pipeline (or the batch
+        # engine) records the active regime per asset; detectors scale
+        # their thresholds via effective_threshold(). Default scale is
+        # 1.0, so without a tracker everything behaves as before.
+        self.regime_scale: dict[str, float] = {}
+        self.regime_by_asset: dict[str, str] = {}
+
+    def effective_threshold(self, asset: str) -> float:
+        """Base threshold scaled by the asset's active volatility regime."""
+        return self.threshold * self.regime_scale.get(asset, 1.0)
+
+    def current_regime(self, asset: str) -> str:
+        return self.regime_by_asset.get(asset, "unknown")
 
     def _update_window(self, asset: str, price: float) -> list[float]:
         """Add a price to the sliding window for an asset."""

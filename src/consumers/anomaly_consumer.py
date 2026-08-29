@@ -178,6 +178,12 @@ class AnomalyConsumer(BaseConsumer):
                     if macro:
                         description = augment_description(description, timestamp)
 
+                    # Volatility regime recorded at fire time so stored
+                    # anomalies are self-explanatory later.
+                    regime = anomaly.get("metadata", {}).get("regime")
+                    if regime:
+                        description += f" [regime: {regime}]"
+
                     session.add(AnomalyEvent(
                         timestamp=timestamp,
                         symbol=symbol,

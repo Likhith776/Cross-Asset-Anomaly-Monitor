@@ -115,8 +115,10 @@ class CrossAssetCorrelationDetector(BaseDetector):
 
             corr_z = abs(current_corr - hist_mean) / hist_std
 
-            if corr_z >= self.threshold:
-                normalized_score = min(corr_z / (self.threshold * 2), 1.0)
+            # Regime-scaled threshold (wider in high-vol regimes).
+            threshold = self.effective_threshold(asset)
+            if corr_z >= threshold:
+                normalized_score = min(corr_z / (threshold * 2), 1.0)
                 severity = self._classify_severity(normalized_score)
 
                 return AnomalyEvent(
@@ -133,6 +135,7 @@ class CrossAssetCorrelationDetector(BaseDetector):
                         "historical_mean": round(float(hist_mean), 4),
                         "historical_std": round(float(hist_std), 4),
                         "correlation_z_score": round(float(corr_z), 4),
+                        "regime": self.current_regime(asset),
                     },
                 )
 
