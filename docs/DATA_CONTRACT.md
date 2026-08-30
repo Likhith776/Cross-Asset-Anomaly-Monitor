@@ -6,7 +6,7 @@ publishes JSON snapshots to the `live-data` branch, which GitHub Pages
 serves at:
 
 ```
-https://likhith776.github.io/cross-asset-anomaly-monitor/
+https://likhith776.github.io/Cross-Asset-Anomaly-Monitor/
 ```
 
 Any front-end — including the future UI/UX revamp — consumes only the

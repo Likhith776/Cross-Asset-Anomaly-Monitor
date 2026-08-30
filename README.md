@@ -334,8 +334,8 @@ dashboard + data snapshots to the `live-data` branch, served by GitHub
 Pages. No server, no database, no card, and no dependence on any
 personal machine being on.
 
-- **Live URL**: `https://likhith776.github.io/cross-asset-anomaly-monitor/`
-- **Incident log**: `https://likhith776.github.io/cross-asset-anomaly-monitor/incidents.html` — the shareable, human-readable record of caught anomalies
+- **Live URL**: `https://likhith776.github.io/Cross-Asset-Anomaly-Monitor/`
+- **Incident log**: `https://likhith776.github.io/Cross-Asset-Anomaly-Monitor/incidents.html` — the shareable, human-readable record of caught anomalies
 - **Cadence**: every 30 minutes (`LIVE` workflow; also runs on every push)
 - **Data contract**: [`docs/DATA_CONTRACT.md`](docs/DATA_CONTRACT.md) —
   the JSON schemas the dashboard (and the upcoming UI revamp) consume

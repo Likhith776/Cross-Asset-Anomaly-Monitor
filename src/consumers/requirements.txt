@@ -8,3 +8,4 @@ python-dotenv==1.0.0
 sqlalchemy[asyncio]==2.0.23
 asyncpg==0.29.0
 prometheus-client==0.20.0
+requests==2.31.0
