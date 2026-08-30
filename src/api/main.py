@@ -38,6 +38,7 @@ from src.api.models import (
     HealthResponse,
     MetaResponse,
 )
+from src.detection.lead_lag import extract_lead_lag
 from src.precision import compute_precision, detector_from_description
 
 load_dotenv()

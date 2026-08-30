@@ -196,3 +196,110 @@ def test_anomaly_response_lead_lag_none_without_marker():
         lead_lag=extract_lead_lag("Tick-level zscore_spike — high severity"),
     )
     assert event.lead_lag is None
+
+
+def test_anomaly_endpoints_resolve_lead_lag_at_call_time():
+    """
+    Regression test for a call-time NameError: both /anomalies endpoints
+    called extract_lead_lag(r["description"]) without importing it —
+    import-time checks (and direct AnomalyEventResponse construction)
+    never exercised this path. Drives the real endpoint functions with
+    a fake session so the actual route code runs.
+    """
+    import asyncio
+
+    from src.api import main as api_main
+
+    row = {
+        "id": 1,
+        "timestamp": datetime.now(timezone.utc),
+        "symbol": "BTC-USD",
+        "anomaly_score": 0.9,
+        "z_flag": True,
+        "ewma_flag": False,
+        "pca_flag": False,
+        "description": (
+            "Tick-level zscore_spike — high severity "
+            "[lead-lag: led by GC=F (2 ticks, r=0.71)]"
+        ),
+        "macro_context": None,
+        "llm_explanation": None,
+    }
+
+    class _FakeMappings:
+        def __init__(self, rows):
+            self._rows = rows
+
+        def all(self):
+            return self._rows
+
+    class _FakeResult:
+        def __init__(self, rows):
+            self._rows = rows
+
+        def mappings(self):
+            return _FakeMappings(self._rows)
+
+    class _FakeSession:
+        def __init__(self, rows):
+            self._rows = rows
+
+        async def execute(self, stmt, params=None):
+            return _FakeResult(self._rows)
+
+    session = _FakeSession([row])
+
+    by_symbol = asyncio.run(
+        api_main.get_anomalies_by_symbol(symbol="BTC-USD", days=7, session=session)
+    )
+    assert by_symbol[0].lead_lag == {
+        "leader": "GC=F", "lag_ticks": 2, "correlation": 0.71,
+    }
+
+    all_events = asyncio.run(
+        api_main.get_anomalies(limit=50, min_score=0.0, session=session)
+    )
+    assert all_events[0].lead_lag == {
+        "leader": "GC=F", "lag_ticks": 2, "correlation": 0.71,
+    }
+
+
+def test_anomaly_endpoints_lead_lag_none_without_marker():
+    row = {
+        "id": 1,
+        "timestamp": datetime.now(timezone.utc),
+        "symbol": "BTC-USD",
+        "anomaly_score": 0.9,
+        "z_flag": True,
+        "ewma_flag": False,
+        "pca_flag": False,
+        "description": "Tick-level zscore_spike — high severity",
+        "macro_context": None,
+        "llm_explanation": None,
+    }
+
+    class _FakeResult:
+        def __init__(self, rows):
+            self._rows = rows
+
+        def mappings(self):
+            return self
+
+        def all(self):
+            return self._rows
+
+    class _FakeSession:
+        def __init__(self, rows):
+            self._rows = rows
+
+        async def execute(self, stmt, params=None):
+            return _FakeResult(self._rows)
+
+    import asyncio
+
+    from src.api import main as api_main
+
+    out = asyncio.run(
+        api_main.get_anomalies_by_symbol(symbol="BTC-USD", days=7, session=_FakeSession([row]))
+    )
+    assert out[0].lead_lag is None
