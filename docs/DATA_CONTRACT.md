@@ -164,8 +164,9 @@ isolation_forest_outlier → `iforest`, correlation_break →
 ## `data/incidents.json` + `incidents.html`
 
 The **incident log** — the most visible, shareable artifact of the
-system. Served at `incidents.html` (linked from the dashboard header)
-with its structured data at `data/incidents.json`.
+system. Rendered as the `#incidents` section of the main dashboard
+(`index.html#incidents`; the old standalone `incidents.html` page is
+now a redirect stub) with its structured data at `data/incidents.json`.
 
 `incidents.json` is the published anomaly list filtered to a trailing
 **60-day retention window** (`retention_days` field; chosen so the log
@@ -203,9 +204,11 @@ placeholders):
 records carry both explicitly; batch-composite records are reported as
 type/detector `batch_composite` with the detector clauses in the
 description. Anomalies missing optional context simply omit the
-corresponding fields. `incidents.html` renders these entries
-most-recent-first with severity-colored borders and links back to the
-live dashboard.
+corresponding fields. `index.html#incidents` renders these entries
+most-recent-first with severity-colored borders and links into the
+price-chart section. Events also carry parsed `type` and `detector`
+fields (from the stored description; batch-composite records report
+`batch_composite`).
 
 ## `data/charts/{symbol}.json`
 
