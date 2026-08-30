@@ -30,7 +30,10 @@ from src.detection.explain import (
     build_snapshot_from_features,
     explain_from_env,
 )
-from src.detection.lead_lag import augment_description, lead_lag_for
+from src.detection.lead_lag import (
+    augment_description as augment_description_lead_lag,
+    lead_lag_for,
+)
 from src.detection.regime import (
     REGIME_MEDIUM,
     classify_vol_percentile,
@@ -235,14 +238,17 @@ def insert_anomaly_events(
     if not events:
         return 0
 
-    from src.detection.macro_calendar import augment_description, macro_event_for
+    from src.detection.macro_calendar import (
+        augment_description_macro,
+        macro_event_for,
+    )
 
     rows = []
     for e in events:
         macro = macro_event_for(e["timestamp"])
         description = e["description"]
         if macro:
-            description = augment_description(description, e["timestamp"])
+            description = augment_description_macro(description, e["timestamp"])
         rows.append((
             e["timestamp"],
             e["symbol"],
@@ -705,7 +711,7 @@ def run_detection(db_conn: Any) -> list[dict[str, Any]]:
                 # first (annotation only, same as macro context).
                 lead_lag = lead_lag_for(symbol, returns_by_symbol)
                 if lead_lag:
-                    description = augment_description(description, lead_lag)
+                    description = augment_description_lead_lag(description, lead_lag)
 
                 # Optional LLM explanation (high-severity only; null when
                 # off, budget-exhausted, or failed — never blocks the

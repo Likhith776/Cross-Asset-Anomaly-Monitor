@@ -164,3 +164,35 @@ def test_blank_description_attributes_to_unknown():
     ]
     r = compute_precision(labels, window_days=30)
     assert r["by_detector"][0]["detector"] == "unknown"
+
+
+def test_anomaly_response_parses_lead_lag_from_marker():
+    """The API model carries the structured lead-lag hint when the
+    description carries the marker (same read-time parse as livesite)."""
+    from src.api.models import AnomalyEventResponse
+    from src.detection.lead_lag import extract_lead_lag
+
+    description = (
+        "Tick-level zscore_spike — high severity "
+        "[lead-lag: led by GC=F (2 ticks, r=0.71)]"
+    )
+    event = AnomalyEventResponse(
+        id=1, timestamp=datetime.now(timezone.utc), symbol="BTC-USD",
+        anomaly_score=0.9, z_flag=True, ewma_flag=False, pca_flag=False,
+        description=description,
+        lead_lag=extract_lead_lag(description),
+    )
+    assert event.lead_lag == {"leader": "GC=F", "lag_ticks": 2, "correlation": 0.71}
+
+
+def test_anomaly_response_lead_lag_none_without_marker():
+    from src.api.models import AnomalyEventResponse
+    from src.detection.lead_lag import extract_lead_lag
+
+    event = AnomalyEventResponse(
+        id=1, timestamp=datetime.now(timezone.utc), symbol="BTC-USD",
+        anomaly_score=0.9, z_flag=True, ewma_flag=False, pca_flag=False,
+        description="Tick-level zscore_spike — high severity",
+        lead_lag=extract_lead_lag("Tick-level zscore_spike — high severity"),
+    )
+    assert event.lead_lag is None

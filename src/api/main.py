@@ -374,6 +374,7 @@ async def get_anomalies(
             description=r["description"],
             macro_context=r["macro_context"],
             llm_explanation=r["llm_explanation"],
+            lead_lag=extract_lead_lag(r["description"]),
         )
         for r in rows
     ]
@@ -421,6 +422,7 @@ async def get_anomalies_by_symbol(
             description=r["description"],
             macro_context=r["macro_context"],
             llm_explanation=r["llm_explanation"],
+            lead_lag=extract_lead_lag(r["description"]),
         )
         for r in rows
     ]

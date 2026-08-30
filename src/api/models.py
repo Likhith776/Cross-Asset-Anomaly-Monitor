@@ -72,6 +72,12 @@ class AnomalyEventResponse(BaseModel):
                     "feature is off, the budget is exhausted, or generation "
                     "failed.",
     )
+    lead_lag: Optional[dict] = Field(
+        None,
+        description="Lead-lag hint parsed from the description: "
+                    "{leader, lag_ticks, correlation} when a correlated "
+                    "partner consistently moved first; null otherwise.",
+    )
 
     model_config = {"from_attributes": True}
 

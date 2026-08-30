@@ -775,12 +775,18 @@ if anomalies:
             f"<span style='font-size:12px;color:var(--muted,#8b98a5)'>{a_signals}</span>",
             unsafe_allow_html=True,
         )
+        ll = a.get("lead_lag")
+        ll_chip = (
+            f" <span style='font-size:11px;color:var(--muted,#8b98a5)'>"
+            f"⏱ led by {ll['leader']} ({ll['lag_ticks']}t, r={ll['correlation']})</span>"
+            if ll else ""
+        )
         expl_html = (
             f"<br><span style='font-size:11px;color:#58a6ff'>📝 {a_expl}</span>"
             if a_expl else ""
         )
         row_cols[4].markdown(
-            f"<span style='font-size:12px'>{a_desc}</span>{expl_html}",
+            f"<span style='font-size:12px'>{a_desc}</span>{ll_chip}{expl_html}",
             unsafe_allow_html=True,
         )
         if a_id is None:
