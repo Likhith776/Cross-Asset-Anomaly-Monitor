@@ -43,6 +43,11 @@ def test_images_shipping_the_detection_tree_declare_requests():
             "src/detection/explain.py, which imports requests when an "
             "anomaly explanation is requested"
         )
+    assert covered, (
+        "no Dockerfile matched src/*/Dockerfile with 'COPY "
+        "src/detection/' — update the glob pattern or COPY match in "
+        "this test, since it currently isn't checking anything"
+    )
 
 
 def test_slim_profile_declares_requests():
