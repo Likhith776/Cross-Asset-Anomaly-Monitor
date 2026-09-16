@@ -1,0 +1,56 @@
+{
+  "base": "http://127.0.0.1:8913",
+  "sampleMs": 6000,
+  "runs": {
+    "baseline": {
+      "frames": 364,
+      "p50": 16.7,
+      "p95": 16.8,
+      "maxMs": 16.8,
+      "dropped": 0,
+      "withinVsyncPct": 100,
+      "longTasks": 0,
+      "longTaskMs": 0,
+      "idle": {
+        "active": 0,
+        "maxActive": 0
+      }
+    },
+    "decryptStorm": {
+      "frames": 361,
+      "p50": 16.7,
+      "p95": 16.8,
+      "maxMs": 16.8,
+      "dropped": 0,
+      "withinVsyncPct": 100,
+      "longTasks": 0,
+      "longTaskMs": 0,
+      "idle": {
+        "active": 0,
+        "maxActive": 4
+      }
+    }
+  },
+  "assertions": [
+    {
+      "name": "decrypt does not drop frames versus baseline",
+      "pass": true,
+      "detail": "100% within one vsync vs 100% baseline, 0 dropped"
+    },
+    {
+      "name": "decrypt stays above 95% within one vsync",
+      "pass": true,
+      "detail": "100%"
+    },
+    {
+      "name": "no long tasks introduced",
+      "pass": true,
+      "detail": "0ms vs 0ms baseline"
+    },
+    {
+      "name": "no animation loop left running when idle",
+      "pass": true,
+      "detail": "{\"active\":0,\"maxActive\":4}"
+    }
+  ]
+}
