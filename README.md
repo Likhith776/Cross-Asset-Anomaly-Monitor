@@ -405,7 +405,7 @@ Until that file exists, treat the code as source-available, not open source.
   ([@Likhith776](https://github.com/Likhith776)).
 - Visual language: measured from [codapress.co.uk](https://codapress.co.uk/) —
   structure, tokens and behaviour only; no copy, imagery or code reused. The
-  parity evidence is documented in [`docs/design/`](docs/design/).
+  parity evidence is documented in [`docs/design/`](docs/design/CODAPRESS-DESIGN-PARITY.md).
 - Typeface: [JetBrains Mono](https://www.jetbrains.com/lp/mono/) (SIL Open Font
   License).
 - Charts: [Apache ECharts](https://echarts.apache.org/) 5.5 via jsDelivr.
