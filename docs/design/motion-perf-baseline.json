@@ -3,9 +3,9 @@
   "sampleMs": 6000,
   "runs": {
     "baseline": {
-      "frames": 360,
+      "frames": 361,
       "p50": 16.7,
-      "p95": 16.8,
+      "p95": 16.7,
       "maxMs": 16.8,
       "dropped": 0,
       "withinVsyncPct": 100,
@@ -14,6 +14,12 @@
       "idle": {
         "active": 0,
         "maxActive": 0
+      },
+      "timers": {
+        "before": 2,
+        "after": 0,
+        "peak": 5,
+        "created": 19
       }
     },
     "decryptStorm": {
@@ -28,6 +34,12 @@
       "idle": {
         "active": 0,
         "maxActive": 4
+      },
+      "timers": {
+        "before": 2,
+        "after": 0,
+        "peak": 5,
+        "created": 97
       }
     }
   },
@@ -51,6 +63,11 @@
       "name": "no animation loop left running when idle",
       "pass": true,
       "detail": "{\"active\":0,\"maxActive\":4}"
+    },
+    {
+      "name": "no timer leaked: live handles fall back to the resting level",
+      "pass": true,
+      "detail": "live 2 before -> 0 after the storm (peak 5); the effect itself creates none"
     }
   ]
 }

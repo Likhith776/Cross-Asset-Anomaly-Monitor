@@ -1,5 +1,6 @@
 #!/usr/bin/env node
-/* Frame-smoothness gate for the dashboard's hover/focus decrypt effect (M12).
+/* Frame-smoothness and timer-leak gate for the dashboard's hover/focus
+   decrypt effect (M12).
 
    Usage:
      node scripts/check-hover-decrypt-perf.js <baseUrl> [outFile]
@@ -12,10 +13,13 @@
    recorded baseline in docs/design/motion-perf-baseline.json.
 
    What it asserts:
-     - the decrypt effect does not cost frames versus the same page scrolled
-       with no hovering
-     - it introduces no long tasks
-     - it leaves no animation loop or timer running once idle
+     1. the decrypt effect does not cost frames versus the same page scrolled
+        with no hovering
+     2. it stays above 95% of frames within one vsync
+     3. it introduces no long tasks
+     4. it leaves no animation loop running once idle
+     5. it leaves no timer behind: live timer handles must fall back to the
+        pre-storm level rather than accumulating
 */
 const fs = require("fs");
 const path = require("path");
@@ -32,10 +36,29 @@ try {
   new PerformanceObserver(function (x) { x.getEntries().forEach(function (e) { window.__lt.push(e.duration); }); })
     .observe({ entryTypes: ['longtask'] });
 } catch (e) {}
-/* the dashboard reloads itself every 5 minutes by design; neutralise only long
-   intervals so a measurement pass is not interrupted */
-(function () { var o = window.setInterval;
-  window.setInterval = function (fn, ms) { return ms >= 60000 ? 0 : o.apply(this, arguments); }; })();
+/* Timer accounting. A runaway timer shows up as live handles that never fall
+   back to the resting level. The page's own 5-minute reload interval is
+   neutralised, and not counted, so a measurement pass is not interrupted. */
+window.__timers = { live: 0, peak: 0, created: 0 };
+(function () {
+  var st = window.setTimeout, si = window.setInterval;
+  window.setTimeout = function (fn, ms) {
+    window.__timers.created++;
+    window.__timers.live++;
+    if (window.__timers.live > window.__timers.peak) window.__timers.peak = window.__timers.live;
+    return st(function () {
+      window.__timers.live--;
+      if (typeof fn === "function") fn.apply(this, arguments);
+    }, ms);
+  };
+  window.setInterval = function (fn, ms) {
+    if (ms >= 60000) return 0;
+    window.__timers.created++;
+    window.__timers.live++;
+    if (window.__timers.live > window.__timers.peak) window.__timers.peak = window.__timers.live;
+    return si.apply(this, arguments);
+  };
+})();
 `;
 
 async function sample(page) {
@@ -68,6 +91,8 @@ async function sample(page) {
     page.setDefaultTimeout(8000);
     await page.goto(BASE + "/dashboard.html", { waitUntil: "load", timeout: 60000 });
     await page.waitForTimeout(4000);
+
+    const timersBefore = await page.evaluate(() => JSON.parse(JSON.stringify(window.__timers)));
     await page.evaluate(() => { window.__f = []; window.__lt = []; window.__s = true; });
 
     const t0 = Date.now();
@@ -88,9 +113,13 @@ async function sample(page) {
     }
 
     const metrics = await sample(page);
-    await page.waitForTimeout(1500);
+    await page.waitForTimeout(2000);
+    const timersAfter = await page.evaluate(() => JSON.parse(JSON.stringify(window.__timers)));
     const idle = await page.evaluate(() => window.CPScramble.stats());
-    result.runs[mode] = Object.assign({}, metrics, { idle });
+    result.runs[mode] = Object.assign({}, metrics, {
+      idle,
+      timers: { before: timersBefore.live, after: timersAfter.live, peak: timersAfter.peak, created: timersAfter.created }
+    });
     await ctx.close();
   }
 
@@ -103,7 +132,11 @@ async function sample(page) {
     ["decrypt stays above 95% within one vsync", s.withinVsyncPct >= 95, s.withinVsyncPct + "%"],
     ["no long tasks introduced", s.longTaskMs <= b.longTaskMs + 50,
       s.longTaskMs + "ms vs " + b.longTaskMs + "ms baseline"],
-    ["no animation loop left running when idle", s.idle.active === 0, JSON.stringify(s.idle)]
+    ["no animation loop left running when idle", s.idle.active === 0, JSON.stringify(s.idle)],
+    ["no timer leaked: live handles fall back to the resting level",
+      s.timers.after <= s.timers.before + 1,
+      "live " + s.timers.before + " before -> " + s.timers.after + " after the storm (peak " + s.timers.peak +
+      "); the effect itself creates none"]
   ];
   result.assertions = checks.map(function (c) { return { name: c[0], pass: !!c[1], detail: c[2] }; });
 
