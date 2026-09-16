@@ -19,6 +19,7 @@ file-backed equivalents.
 """
 
 import json
+import shutil
 import logging
 import os
 import re
@@ -637,17 +638,24 @@ class LiveSite:
                 },
             )
 
-        # Copy the static pages (dashboard + incident log) next to the data.
-        site_dir = os.path.join(
-            os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
-            "site",
-        )
+        # Copy the static pages next to the data. The landing page lives at the
+        # repository root and is published as index.html; the dashboard, the
+        # incident redirect shim and every shared asset come from site/.
+        root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        site_dir = os.path.join(root_dir, "site")
+        landing = os.path.join(root_dir, "cross-asset-anomaly-monitor-v6.html")
         os.makedirs(self.out_dir, exist_ok=True)
-        for page in ("index.html", "incidents.html"):
-            with open(os.path.join(site_dir, page), encoding="utf-8") as src_fh:
-                html = src_fh.read()
-            with open(os.path.join(self.out_dir, page), "w", encoding="utf-8") as dst:
-                dst.write(html)
+
+        shutil.copyfile(landing, os.path.join(self.out_dir, "index.html"))
+        for page in ("dashboard.html", "incidents.html"):
+            shutil.copyfile(
+                os.path.join(site_dir, page), os.path.join(self.out_dir, page)
+            )
+        shutil.copytree(
+            os.path.join(site_dir, "assets"),
+            os.path.join(self.out_dir, "assets"),
+            dirs_exist_ok=True,
+        )
 
         open(os.path.join(self.out_dir, ".nojekyll"), "w").close()
         logger.info("[LIVE] artifacts written to %s", self.out_dir)

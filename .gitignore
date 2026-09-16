@@ -23,3 +23,15 @@ backtest_report.json
 
 # Slim-profile backups
 backups/
+
+# Working artefacts - design extraction evidence and local verification builds
+design-extraction/
+.verify/
+build/
+.openclaw-verify-build.js
+
+# Local tooling leftovers (Playwright scratch, 3D prototype from an earlier pass)
+site3d/
+node_modules/
+package.json
+package-lock.json

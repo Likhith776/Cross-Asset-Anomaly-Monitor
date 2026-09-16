@@ -9,7 +9,7 @@ serves at:
 https://likhith776.github.io/Cross-Asset-Anomaly-Monitor/
 ```
 
-Any front-end — including the future UI/UX revamp — consumes only the
+Any front-end — including the landing page and the dashboard — consumes only the
 files below. Treat them as the system's public API.
 
 Refresh cadence: every 30 minutes (GitHub Actions cron; occasional

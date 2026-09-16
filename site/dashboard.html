@@ -1,0 +1,277 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#000000">
+<title>Dashboard &mdash; Cross-Asset Anomaly Monitor</title>
+<meta name="description" content="Live cross-asset anomaly dashboard: asset status, price history, correlation structure, anomaly timeline, alerts, detector precision and the incident log.">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/codapress.css">
+<link rel="stylesheet" href="assets/css/dashboard.css">
+<script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js" defer></script>
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to main content</a>
+
+<header class="header">
+  <div class="header__inner">
+    <a class="header__brand" href="index.html" aria-label="Cross-Asset Anomaly Monitor &mdash; home">
+      <svg class="brandmark" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <rect class="brandmark__box" x="0" y="0" width="24" height="24"></rect>
+        <path class="brandmark__glyph" d="M15.6 8.2a4.6 4.6 0 1 0 0 7.6M7 4.6h10M7 19.4h10" fill="none" stroke="#000" stroke-width="2.1" stroke-linecap="square"></path>
+      </svg>
+      <span class="header__wordmark">Cross-Asset Monitor</span>
+    </a>
+    <nav class="header__nav" aria-label="Primary">
+      <a class="nav-link" href="#overview">Overview</a>
+      <a class="nav-link" href="#assets">Assets</a>
+      <a class="nav-link" href="#anomalies">Anomalies</a>
+      <a class="nav-link" href="#incidents">Incidents</a>
+    </nav>
+    <button class="header__menu" type="button" aria-expanded="false" aria-controls="mobile-menu" aria-label="Open menu">
+      <span class="header__menu-icon" aria-hidden="true">
+        <span class="header__menu-bar"></span>
+        <span class="header__menu-bar"></span>
+        <span class="header__menu-bar"></span>
+      </span>
+    </button>
+  </div>
+</header>
+
+<div class="mobile-menu" id="mobile-menu">
+  <nav class="mobile-menu__nav" aria-label="Mobile">
+    <a class="mobile-menu__link" href="index.html">Home</a>
+    <a class="mobile-menu__link" href="#overview">Overview</a>
+    <a class="mobile-menu__link" href="#assets">Assets</a>
+    <a class="mobile-menu__link" href="#anomalies">Anomalies</a>
+    <a class="mobile-menu__link" href="#performance">Performance</a>
+    <a class="mobile-menu__link" href="#incidents">Incidents</a>
+  </nav>
+  <p class="mobile-menu__meta" data-updated>no snapshot available</p>
+</div>
+
+<main class="container dash" id="main">
+
+  <section class="dash-section" id="hero" aria-labelledby="hero-title">
+    <div class="section-header">
+      <div>
+        <span class="section-header__eyebrow">Live dashboard</span>
+        <h1 class="section-header__title" id="hero-title">Cross-Asset Anomaly Monitor</h1>
+      </div>
+      <a class="section-header__action" href="index.html">Project home &rarr;</a>
+    </div>
+    <p class="dash-section__note">Automated multi-detector anomaly surveillance across equities, crypto,
+      commodities, FX and rates &mdash; fetched, detected and published by scheduled CI with no server
+      and no downtime.</p>
+    <div class="row">
+      <p class="cp-status cp-status--live" data-status hidden></p>
+      <p class="mono-xs" data-hero-ts>loading&hellip;</p>
+      <p class="mono-xs" data-updated>loading&hellip;</p>
+    </div>
+  </section>
+
+  <section class="dash-section" id="overview" aria-labelledby="overview-title">
+    <div class="section-header">
+      <div>
+        <span class="section-header__eyebrow">01</span>
+        <h2 class="section-header__title" id="overview-title">Asset status</h2>
+      </div>
+      <a class="section-header__action" href="data/latest.json">latest.json &rarr;</a>
+    </div>
+    <div class="asset-grid" id="cards"></div>
+  </section>
+
+  <section class="dash-section" id="assets" aria-labelledby="assets-title">
+    <div class="section-header">
+      <div>
+        <span class="section-header__eyebrow">02</span>
+        <h2 class="section-header__title" id="assets-title">Price history</h2>
+      </div>
+      <a class="section-header__action" href="data/charts/">charts/ &rarr;</a>
+    </div>
+    <div class="symbol-bar" id="symbol-bar" role="group" aria-label="Choose an instrument"></div>
+    <div class="panel chart-wrap">
+      <div class="chart" id="price-chart"></div>
+      <div class="chart-state" data-chart-state="price" role="status"></div>
+    </div>
+
+    <div class="section-header">
+      <div>
+        <span class="section-header__eyebrow">03</span>
+        <h2 class="section-header__title">Correlation structure</h2>
+      </div>
+      <a class="section-header__action" href="data/correlations.json">correlations.json &rarr;</a>
+    </div>
+    <div class="panel chart-wrap">
+      <div class="chart" id="corr-heatmap"></div>
+      <div class="chart-state" data-chart-state="corr" role="status"></div>
+    </div>
+    <p class="mono-xs" id="corr-summary"></p>
+  </section>
+
+  <section class="dash-section" id="anomalies" aria-labelledby="anomalies-title">
+    <div class="section-header">
+      <div>
+        <span class="section-header__eyebrow">04</span>
+        <h2 class="section-header__title" id="anomalies-title">Anomaly timeline</h2>
+      </div>
+      <a class="section-header__action" href="data/anomalies.json">anomalies.json &rarr;</a>
+    </div>
+    <div class="filters">
+      <label>Window
+        <select id="t-window">
+          <option value="60">1H</option>
+          <option value="360">6H</option>
+          <option value="1440" selected>24H</option>
+          <option value="10080">7D</option>
+          <option value="43200">30D</option>
+          <option value="all">All</option>
+        </select>
+      </label>
+      <label>Min severity
+        <select id="t-severity">
+          <option value="all">All</option>
+          <option value="low">Low+</option>
+          <option value="medium" selected>Medium+</option>
+          <option value="high">High+</option>
+          <option value="critical">Critical only</option>
+        </select>
+      </label>
+      <label>Min score
+        <input type="range" id="t-score" min="0" max="100" value="0" step="5">
+        <span class="tnum" id="t-score-val">0.00</span>
+      </label>
+      <span class="filters__count" id="t-count"></span>
+    </div>
+    <div class="panel chart-wrap">
+      <div class="chart" id="timeline-chart"></div>
+      <div class="chart-state" data-chart-state="timeline" role="status"></div>
+    </div>
+
+    <div class="section-header">
+      <div>
+        <span class="section-header__eyebrow">05</span>
+        <h2 class="section-header__title">Recent alerts</h2>
+      </div>
+      <a class="section-header__action" href="data/feedback.json">feedback.json &rarr;</a>
+    </div>
+    <div class="filters">
+      <label>Severity
+        <select id="r-severity">
+          <option value="all">All</option>
+          <option value="low">Low+</option>
+          <option value="medium" selected>Medium+</option>
+          <option value="high">High+</option>
+          <option value="critical">Critical only</option>
+        </select>
+      </label>
+      <label>Min score
+        <input type="range" id="r-score" min="0" max="100" value="0" step="5">
+        <span class="tnum" id="r-score-val">0.00</span>
+      </label>
+      <label>Sort
+        <select id="r-sort">
+          <option value="score" selected>Score (high &rarr; low)</option>
+          <option value="time">Time (newest first)</option>
+        </select>
+      </label>
+      <span class="filters__count" id="r-count"></span>
+    </div>
+    <div class="panel panel--flush">
+      <table class="data-table" id="alerts">
+        <caption class="visually-hidden">Recent anomaly alerts. Activate a row to expand its detail.</caption>
+        <thead>
+          <tr><th scope="col">Time (UTC)</th><th scope="col">Symbol</th><th scope="col">Detector</th><th scope="col">Severity</th><th scope="col">Score</th><th scope="col">Label</th><th scope="col">Detail</th></tr>
+        </thead>
+        <tbody></tbody>
+      </table>
+    </div>
+    <div id="alert-detail"></div>
+  </section>
+
+  <section class="dash-section" id="performance" aria-labelledby="perf-title">
+    <div class="section-header">
+      <div>
+        <span class="section-header__eyebrow">06</span>
+        <h2 class="section-header__title" id="perf-title">Detector performance</h2>
+      </div>
+      <a class="section-header__action" href="data/precision.json">precision.json &rarr;</a>
+    </div>
+    <p class="dash-section__note">Rolling 30-day precision over human-labelled alerts. Labels come from
+      reviewing alerts in the incident log; the metric is recomputed on every publish.</p>
+    <div class="precision-chip" id="precision-chip">loading&hellip;</div>
+    <div id="precision-table"></div>
+  </section>
+
+  <section class="dash-section" id="incidents" aria-labelledby="incidents-title">
+    <div class="section-header">
+      <div>
+        <span class="section-header__eyebrow">07</span>
+        <h2 class="section-header__title" id="incidents-title">Incident log</h2>
+      </div>
+      <a class="section-header__action" href="data/incidents.json">incidents.json &rarr;</a>
+    </div>
+    <p class="dash-section__note" id="incidents-note">loading&hellip;</p>
+    <div id="incidents-host"></div>
+  </section>
+
+  <section class="dash-section" id="links" aria-labelledby="links-title">
+    <div class="section-header">
+      <div>
+        <span class="section-header__eyebrow">08</span>
+        <h2 class="section-header__title" id="links-title">Raw data and source</h2>
+      </div>
+    </div>
+    <div class="raw-links">
+      <a href="https://github.com/Likhith776/Cross-Asset-Anomaly-Monitor" rel="noopener">GitHub repository (source)</a>
+      <a href="data/latest.json">Latest market snapshot (JSON)</a>
+      <a href="data/anomalies.json">Anomaly events (JSON)</a>
+      <a href="data/incidents.json">Incident log (JSON)</a>
+      <a href="https://github.com/Likhith776/Cross-Asset-Anomaly-Monitor/blob/main/docs/DATA_CONTRACT.md" rel="noopener">Data contract</a>
+      <a href="https://github.com/Likhith776/Cross-Asset-Anomaly-Monitor/blob/main/docs/backtest_report.md" rel="noopener">Detector quality report (backtest)</a>
+    </div>
+  </section>
+
+</main>
+
+<footer class="footer container">
+  <div class="footer__inner">
+    <div class="footer__left">
+      <svg class="footer__brandmark" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false">
+        <rect class="brandmark__box" x="0" y="0" width="24" height="24"></rect>
+        <path d="M15.6 8.2a4.6 4.6 0 1 0 0 7.6M7 4.6h10M7 19.4h10" fill="none" stroke="#000" stroke-width="2.1" stroke-linecap="square"></path>
+      </svg>
+      <p class="footer__copy">Fetched, detected and published by scheduled CI &mdash; no server, no downtime.</p>
+    </div>
+    <div class="footer__right">
+      <a class="footer__link" href="index.html">Home</a>
+      <a class="footer__link" href="dashboard.html">Dashboard</a>
+      <a class="footer__link" href="https://github.com/Likhith776/Cross-Asset-Anomaly-Monitor/blob/main/README.md" rel="noopener">Readme</a>
+      <div class="footer__socials">
+        <a class="footer__social" href="https://github.com/Likhith776/Cross-Asset-Anomaly-Monitor" rel="noopener" aria-label="GitHub repository">
+          <svg class="footer__icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false"><path d="M12 .5A11.5 11.5 0 0 0 .5 12a11.5 11.5 0 0 0 7.86 10.92c.58.1.79-.25.79-.55v-1.94c-3.2.7-3.88-1.54-3.88-1.54-.53-1.34-1.29-1.7-1.29-1.7-1.05-.72.08-.71.08-.71 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.7 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .96-.3 3.15 1.18a10.9 10.9 0 0 1 5.74 0c2.18-1.48 3.14-1.18 3.14-1.18.63 1.59.23 2.76.12 3.05.74.81 1.18 1.84 1.18 3.1 0 4.43-2.69 5.4-5.25 5.69.41.36.78 1.06.78 2.14v3.17c0 .3.2.66.8.55A11.5 11.5 0 0 0 23.5 12 11.5 11.5 0 0 0 12 .5Z"></path></svg>
+        </a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<div class="cookie-notice" role="region" aria-label="Cookie notice">
+  <p>This site uses no tracking cookies. Browser storage is used only to remember this notice.</p>
+  <div class="cookie-notice__row">
+    <button class="cookie-notice__accept" type="button" data-cookie-accept>That&rsquo;s OK</button>
+    <a class="cookie-notice__decline" href="https://github.com/Likhith776/Cross-Asset-Anomaly-Monitor/blob/main/README.md" rel="noopener">Read more</a>
+  </div>
+</div>
+
+<script src="assets/js/lenis-lite.js" defer></script>
+<script src="assets/js/reveal.js" defer></script>
+<script src="assets/js/cursor.js" defer></script>
+<script src="assets/js/nav.js" defer></script>
+<script src="assets/js/cookie.js" defer></script>
+<script src="assets/js/dashboard.js" defer></script>
+</body>
+</html>

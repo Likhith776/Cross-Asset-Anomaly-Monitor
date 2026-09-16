@@ -1,0 +1,269 @@
+<!DOCTYPE html>
+<html lang="en-GB">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<meta name="theme-color" content="#000000">
+<title>Cross-Asset Anomaly Monitor &mdash; unattended anomaly detection across seven markets</title>
+<meta name="description" content="Cross-Asset Anomaly Monitor watches equities, crypto, commodities, FX and rates with four independent detectors, and publishes every caught anomaly from scheduled CI. No server, no downtime.">
+<meta property="og:title" content="Cross-Asset Anomaly Monitor">
+<meta property="og:description" content="Unattended anomaly detection across seven markets, published live from scheduled CI.">
+<meta property="og:type" content="website">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="assets/css/codapress.css">
+</head>
+<body>
+<a class="skip-link" href="#main">Skip to main content</a>
+
+<header class="header">
+  <div class="header__inner">
+    <a class="header__brand" href="index.html" aria-label="Cross-Asset Anomaly Monitor &mdash; home">
+      <svg class="brandmark" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+        <rect class="brandmark__box" x="0" y="0" width="24" height="24"></rect>
+        <path class="brandmark__glyph" d="M15.6 8.2a4.6 4.6 0 1 0 0 7.6M7 4.6h10M7 19.4h10" fill="none" stroke="#000" stroke-width="2.1" stroke-linecap="square"></path>
+      </svg>
+      <span class="header__wordmark">Cross-Asset Monitor</span>
+    </a>
+    <nav class="header__nav" aria-label="Primary">
+      <a class="nav-link" href="dashboard.html">Dashboard</a>
+      <a class="nav-link" href="#market">Market</a>
+      <a class="nav-link" href="#method">Method</a>
+      <a class="nav-link" href="https://github.com/Likhith776/Cross-Asset-Anomaly-Monitor" rel="noopener">GitHub</a>
+    </nav>
+    <button class="header__menu" type="button" aria-expanded="false" aria-controls="mobile-menu" aria-label="Open menu">
+      <span class="header__menu-icon" aria-hidden="true">
+        <span class="header__menu-bar"></span>
+        <span class="header__menu-bar"></span>
+        <span class="header__menu-bar"></span>
+      </span>
+    </button>
+  </div>
+</header>
+
+<div class="mobile-menu" id="mobile-menu">
+  <nav class="mobile-menu__nav" aria-label="Mobile">
+    <a class="mobile-menu__link" href="dashboard.html">Dashboard</a>
+    <a class="mobile-menu__link" href="#market">Market</a>
+    <a class="mobile-menu__link" href="#method">Method</a>
+    <a class="mobile-menu__link" href="#incidents">Incidents</a>
+    <a class="mobile-menu__link" href="https://github.com/Likhith776/Cross-Asset-Anomaly-Monitor" rel="noopener">GitHub</a>
+  </nav>
+  <p class="mobile-menu__meta" data-updated>no snapshot published yet</p>
+</div>
+
+<main id="main">
+
+  <!-- Hero: the headline is composited inside the dithered plasma field -->
+  <section class="home-hero" data-dither-hero data-hero-lines="CROSS-ASSET|ANOMALY|MONITOR" aria-labelledby="hero-title">
+    <div class="dither-hero">
+      <canvas class="dither-hero__canvas" aria-hidden="true"></canvas>
+      <div class="dither-hero__vignette" aria-hidden="true"></div>
+    </div>
+    <div class="home-hero__title">
+      <p class="home-hero__eyebrow" data-hero-status>awaiting first published snapshot</p>
+      <h1 id="hero-title">Cross-Asset Anomaly Monitor</h1>
+    </div>
+    <p class="home-hero__scroll" aria-hidden="true">Scroll &darr;</p>
+  </section>
+
+  <!-- Lede -->
+  <section class="home-lede container">
+    <p data-reveal>Equities, crypto, commodities, FX and rates, watched together. Four independent
+      detectors run over the same live quote stream, cross-check each other, and publish what they
+      catch &mdash; prices, features, correlations, incidents and precision &mdash; straight from a
+      scheduled CI job. No server to keep warm, no downtime to explain, no paid tier to outgrow.</p>
+    <p class="home-lede__meta" data-reveal>
+      <span data-updated>no snapshot published yet</span>
+      <span><a class="link-underline" href="dashboard.html">Open the live dashboard &rarr;</a></span>
+    </p>
+  </section>
+
+  <!-- Tracked market: the arc carousel -->
+  <section class="section container" id="market">
+    <div class="section-header" data-reveal>
+      <div>
+        <span class="section-header__eyebrow">01 &mdash; Universe</span>
+        <h2 class="section-header__title">Tracked market</h2>
+      </div>
+      <a class="section-header__action" href="dashboard.html">All instruments &rarr;</a>
+    </div>
+    <div class="arc-shell">
+      <div class="arc-carousel" data-arc-carousel aria-label="Tracked instruments">
+        <div class="arc-carousel__viewport">
+          <div class="arc-carousel__ring" data-arc-ring>
+            <div class="empty-state" style="width:min(560px,80vw);margin:0 auto">Loading the tracked universe&hellip;</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Latest signal: the featured block -->
+  <section class="section container" id="signal">
+    <div class="section-header" data-reveal>
+      <div>
+        <span class="section-header__eyebrow">02 &mdash; Signal</span>
+        <h2 class="section-header__title">Latest signal</h2>
+      </div>
+      <a class="section-header__action" href="dashboard.html#anomalies">All alerts &rarr;</a>
+    </div>
+    <div data-featured data-reveal>
+      <div class="empty-state">Loading the latest published signal&hellip;</div>
+    </div>
+  </section>
+
+  <!-- Method -->
+  <section class="section container" id="method">
+    <div class="section-header" data-reveal>
+      <div>
+        <span class="section-header__eyebrow">03 &mdash; Method</span>
+        <h2 class="section-header__title">How a signal is produced</h2>
+      </div>
+      <a class="section-header__action" href="https://github.com/Likhith776/Cross-Asset-Anomaly-Monitor/blob/main/docs/DATA_CONTRACT.md" rel="noopener">Data contract &rarr;</a>
+    </div>
+    <div class="record-grid">
+      <article class="record-card" data-reveal>
+        <div class="record-card__image-wrap">
+          <div class="record-card__image">
+            <span class="record-card__image-surface">
+              <svg viewBox="0 0 100 100" aria-hidden="true" focusable="false">
+                <rect width="100" height="100" fill="#000"></rect>
+                <g fill="none" stroke="#fff" stroke-width="1.4">
+                  <path d="M12 78 L12 22 M12 78 L88 78"></path>
+                  <path d="M14 70 L26 58 L38 64 L50 40 L62 47 L74 26 L86 18"></path>
+                  <circle cx="50" cy="40" r="3.2"></circle>
+                  <circle cx="86" cy="18" r="3.2"></circle>
+                </g>
+              </svg>
+            </span>
+          </div>
+        </div>
+        <div class="record-card__text">
+          <span class="record-card__index">Step 01 &middot; Ingest</span>
+          <h3 class="record-card__title">Keyless quotes</h3>
+          <p class="record-card__excerpt">A composite feed pulls every instrument on a 30-minute cadence, primary keyless sources first, with retries and a carried-state fallback.</p>
+        </div>
+      </article>
+      <article class="record-card" data-reveal data-reveal-delay="80">
+        <div class="record-card__image-wrap">
+          <div class="record-card__image">
+            <span class="record-card__image-surface">
+              <svg viewBox="0 0 100 100" aria-hidden="true" focusable="false">
+                <rect width="100" height="100" fill="#000"></rect>
+                <g fill="none" stroke="#fff" stroke-width="1.4">
+                  <circle cx="50" cy="50" r="26"></circle>
+                  <path d="M50 24 V76 M24 50 H76 M32 32 L68 68 M68 32 L32 68"></path>
+                </g>
+              </svg>
+            </span>
+          </div>
+        </div>
+        <div class="record-card__text">
+          <span class="record-card__index">Step 02 &middot; Features</span>
+          <h3 class="record-card__title">Rolling state</h3>
+          <p class="record-card__excerpt">Z-scores, EWMA residuals, realised volatility and pairwise correlation are rebuilt from history on every restart, so a cold start is never blind.</p>
+        </div>
+      </article>
+      <article class="record-card" data-reveal data-reveal-delay="160">
+        <div class="record-card__image-wrap">
+          <div class="record-card__image">
+            <span class="record-card__image-surface">
+              <svg viewBox="0 0 100 100" aria-hidden="true" focusable="false">
+                <rect width="100" height="100" fill="#000"></rect>
+                <g fill="none" stroke="#fff" stroke-width="1.4">
+                  <path d="M14 62 L28 44 L42 56 L56 30 L70 40 L86 22"></path>
+                  <path d="M14 74 H86" stroke-dasharray="3 3"></path>
+                  <circle cx="56" cy="30" r="3.4"></circle>
+                </g>
+              </svg>
+            </span>
+          </div>
+        </div>
+        <div class="record-card__text">
+          <span class="record-card__index">Step 03 &middot; Detect</span>
+          <h3 class="record-card__title">Four detectors</h3>
+          <p class="record-card__excerpt">Univariate z-score spikes, isolation forest outliers, correlation breaks and a multivariate Mahalanobis check vote on the same window; regimes rescale the thresholds.</p>
+        </div>
+      </article>
+      <article class="record-card" data-reveal data-reveal-delay="240">
+        <div class="record-card__image-wrap">
+          <div class="record-card__image">
+            <span class="record-card__image-surface">
+              <svg viewBox="0 0 100 100" aria-hidden="true" focusable="false">
+                <rect width="100" height="100" fill="#000"></rect>
+                <g fill="none" stroke="#fff" stroke-width="1.4">
+                  <rect x="20" y="22" width="60" height="40"></rect>
+                  <path d="M20 52 H80 M34 62 V76 M66 62 V76 M50 74 V86"></path>
+                </g>
+              </svg>
+            </span>
+          </div>
+        </div>
+        <div class="record-card__text">
+          <span class="record-card__index">Step 04 &middot; Publish</span>
+          <h3 class="record-card__title">Static, always up</h3>
+          <p class="record-card__excerpt">The run writes JSON and a static page to a published branch. GitHub Pages serves it, and every human label feeds the rolling precision metric.</p>
+        </div>
+      </article>
+    </div>
+  </section>
+
+  <!-- Incidents -->
+  <section class="section container" id="incidents">
+    <div class="section-header" data-reveal>
+      <div>
+        <span class="section-header__eyebrow">04 &mdash; Record</span>
+        <h2 class="section-header__title">Recent incidents</h2>
+      </div>
+      <a class="section-header__action" href="dashboard.html#incidents">Incident log &rarr;</a>
+    </div>
+    <div class="record-grid" data-incidents data-reveal>
+      <div class="empty-state">Loading the incident log&hellip;</div>
+    </div>
+  </section>
+
+</main>
+
+<footer class="footer container">
+  <div class="footer__inner">
+    <div class="footer__left">
+      <svg class="footer__brandmark" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false">
+        <rect class="brandmark__box" x="0" y="0" width="24" height="24"></rect>
+        <path d="M15.6 8.2a4.6 4.6 0 1 0 0 7.6M7 4.6h10M7 19.4h10" fill="none" stroke="#000" stroke-width="2.1" stroke-linecap="square"></path>
+      </svg>
+      <p class="footer__copy">&copy;<span data-year>2026</span> Cross-Asset Anomaly Monitor. Fetched, detected and published by scheduled CI.</p>
+    </div>
+    <div class="footer__right">
+      <a class="footer__link" href="dashboard.html">Dashboard</a>
+      <a class="footer__link" href="dashboard.html#incidents">Incidents</a>
+      <a class="footer__link" href="https://github.com/Likhith776/Cross-Asset-Anomaly-Monitor/blob/main/README.md" rel="noopener">Readme</a>
+      <a class="footer__link" href="#main" data-cookie-open>Cookies</a>
+      <div class="footer__socials">
+        <a class="footer__social" href="https://github.com/Likhith776/Cross-Asset-Anomaly-Monitor" rel="noopener" aria-label="GitHub repository">
+          <svg class="footer__icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false"><path d="M12 .5A11.5 11.5 0 0 0 .5 12a11.5 11.5 0 0 0 7.86 10.92c.58.1.79-.25.79-.55v-1.94c-3.2.7-3.88-1.54-3.88-1.54-.53-1.34-1.29-1.7-1.29-1.7-1.05-.72.08-.71.08-.71 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.7 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .96-.3 3.15 1.18a10.9 10.9 0 0 1 5.74 0c2.18-1.48 3.14-1.18 3.14-1.18.63 1.59.23 2.76.12 3.05.74.81 1.18 1.84 1.18 3.1 0 4.43-2.69 5.4-5.25 5.69.41.36.78 1.06.78 2.14v3.17c0 .3.2.66.8.55A11.5 11.5 0 0 0 23.5 12 11.5 11.5 0 0 0 12 .5Z"></path></svg>
+        </a>
+      </div>
+    </div>
+  </div>
+</footer>
+
+<div class="cookie-notice" role="region" aria-label="Cookie notice">
+  <p>This site uses no tracking cookies. Browser storage is used only to remember this notice and your theme preference.</p>
+  <div class="cookie-notice__row">
+    <button class="cookie-notice__accept" type="button" data-cookie-accept>That&rsquo;s OK</button>
+    <a class="cookie-notice__decline" href="https://github.com/Likhith776/Cross-Asset-Anomaly-Monitor/blob/main/README.md" rel="noopener">Read more</a>
+  </div>
+</div>
+
+<script src="assets/js/lenis-lite.js" defer></script>
+<script src="assets/js/reveal.js" defer></script>
+<script src="assets/js/cursor.js" defer></script>
+<script src="assets/js/nav.js" defer></script>
+<script src="assets/js/carousel.js" defer></script>
+<script src="assets/js/dither-hero.js" defer></script>
+<script src="assets/js/landing.js" defer></script>
+<script src="assets/js/cookie.js" defer></script>
+</body>
+</html>
