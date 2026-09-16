@@ -31,6 +31,53 @@ Effect ids: `M1` section entrance · `M2` heading decode · `M3` paragraph paint
 `M7` table row stagger · `M8` live pulse · `M9` progress rail · `M11` hover depth.
 `M10` (artwork parallax) is deliberately not implemented — see the spec.
 
+## 2a. M12 — hover / focus decrypt
+
+The effect you asked for: hovering (or keyboard-focusing) any link, button or tab
+scrambles its label through random uppercase glyphs and resolves it back in ~400ms.
+
+**Where it lives.** `site/assets/js/motion.js`, section "M12 — hover / focus decrypt"
+(search for `M12`). There is no per-element code anywhere: every control is bound by
+`scBind()`, and nothing was added to `site/dashboard.html` or `site/assets/js/dashboard.js`
+for it.
+
+**Tuning.** The four constants at the top of that section:
+
+```js
+var SC_CHARS   = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";  // glyph set
+var SC_MS      = 400;                           // total duration (reference: 0.4s)
+var SC_LOCK_MIN  = 40;                          // earliest a character locks
+var SC_LOCK_SPAN = 280;                         // lock window, so 40-320ms
+```
+
+`SC_BIND` is the selector list of controls that opt in, `SC_SKIP` the exclusions, and
+`SC_LABEL` the two controls whose label is a child rather than the whole element
+(`.asset-card`, `tr[data-selectable]`). All four are in the same block.
+
+**Applying it to a future element.** Either add its selector to `SC_BIND`, or mark the
+element up with the attribute form the utility already supports:
+
+```html
+<a href="/x" data-scramble=".my-label"><span class="my-label">Signals</span></a>
+```
+
+`data-scramble` takes an inner selector; if the whole element is the label you can also
+just call it directly:
+
+```js
+window.CPScramble.run(document.querySelector(".my-thing"));
+```
+
+**Turning it off for one element:** `data-scramble-skip` on the control, or
+`data-motion-skip="M12"`. Turning off the whole layer disables it too.
+
+**What it will not touch.** Controls with no text of their own are skipped by design — on
+the dashboard that is the hamburger button and the icon-only GitHub link (2 of 213
+matched controls). Everything else with a text label is bound: 211 of 213.
+
+Each control picks exactly one text target, so a card with several text children
+scrambles its label and leaves its price and metadata readable.
+
 ## 3. Tuning
 
 Every timing lives in one place, the `:root` block at the top of `motion.css`:
@@ -64,6 +111,7 @@ seconds.
 | M2 decode, M3 paint, M5 count-up | `requestAnimationFrame` loops in `motion.js`. | They animate text/number content, which CSS cannot interpolate per character. |
 | M6 chart draw-on | ECharts options in `dashboard.js`. | It is the chart library's own animation; nothing to hand-roll. |
 | M9 rail | One `position: fixed` element with `transform: scaleY(var(--p))`. | `transform` only, so it never triggers layout. |
+| M12 hover decrypt | One `requestAnimationFrame` loop per hovered control, cancelled on completion, `blur` or `pointerdown`. | The loop only exists while a label is resolving; a settled page reports `CPScramble.stats().active === 0`. |
 | M11 hover depth | CSS `transform: perspective(500px) …` inside `@media (hover:hover) and (pointer:fine)`. | Touch devices never get a stuck hover state. |
 
 ## 5. Content safety rules the code follows
@@ -82,7 +130,13 @@ These are the invariants that make the layer safe on a data page. Keep them if y
 5. **`M9` uses `transform` only**, so the rail costs no layout.
 6. **Every scroll listener is `{ passive: true }`** and coalesced through a single
    `requestAnimationFrame` guard.
-7. **`motion.js` never writes application state.** It only reads the DOM after
+7. **`M12` preserves the character count and writes the original string back.** The
+   scrambled glyphs come from a monospace-safe set, so a scrambled label occupies the same
+   box as the real one — measured across all 204 measurable controls at **0px width and
+   height delta**. The label's accessible name is pinned to the real text for the duration
+   of the pass, and removed afterwards, so assistive technology never reads scrambled
+   characters.
+8. **`motion.js` never writes application state.** It only reads the DOM after
    `dashboard.js` has rendered, re-armed by a `MutationObserver` on `#cards`,
    `#alerts tbody` and `#incidents-host`.
 
@@ -95,6 +149,8 @@ These are the invariants that make the layer safe on a data page. Keep them if y
 | An element is left mid-animation | Transitions (M4, M11) and `both`-filled keyframes (M1, M5, M7) always end on the class/final value |
 | A user has reduced motion enabled | The layer is disabled before first paint; verified that nothing stays hidden |
 | Repeated visits | No state is persisted, and `data-motion-*` markers are set once per element per load |
+| A decrypt loop never ends | The loop is bounded by `SC_MS`; `blur` and `pointerdown` cancel it early. `CPScramble.stats()` reports `active` / `maxActive` so a runaway is visible |
+| A detached element mid-pass | Rows re-rendered by `dashboard.js` are re-bound by the existing `MutationObserver`; the old element is discarded with its loop |
 
 ## 7. Verification harness
 

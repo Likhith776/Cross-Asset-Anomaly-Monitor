@@ -374,6 +374,171 @@
   }
 
   /* ---------------------------------------------------------------
+     M12 — hover / focus decrypt ("encrypt and decrypt" on hover)
+
+     Values taken from the reference's own module (link-scramble) and
+     confirmed against its live behaviour:
+       charset   A-Z only, so scrambled glyphs are always uppercase while
+                 the original string keeps its own case ("BoTks" -> "Books")
+       duration  400ms, one pass per hover, re-triggered on the next one
+       locking   each character locks at random*0.7*400 + 0.1*400, i.e.
+                 40ms-320ms, so short leading words resolve first
+       other     every non-alphanumeric character is never touched:
+                 spaces, "-", "=", "^", "&", "." and "->" stay put
+       restore   the original string is written back verbatim on completion,
+                 and immediately on pointerdown (so a click never navigates
+                 while the label is mid-decrypt)
+
+     Layout safety: the character COUNT never changes and the dashboard is
+     set in a monospace face, so a scrambled label occupies exactly the same
+     box as the real one. No reflow, no shift.
+
+     Accessibility: the host's accessible name is pinned to the real label for
+     the duration of the pass, so assistive technology never announces
+     scrambled characters. The focus ring is untouched.
+
+     Exposed as window.CPScramble so any future element can opt in with
+     data-scramble="<inner selector>" without duplicating this code.
+     --------------------------------------------------------------- */
+  var SC_CHARS = "ABCDEFGHIJKLMNOPQRSTUVWXYZ";
+  var SC_MS = 400;
+  var SC_LOCK_MIN = 40;
+  var SC_LOCK_SPAN = 280;
+  var SC_BIND = 'a[href], button, [role="tab"], [role="menuitem"], tr[data-selectable]';
+  var SC_SKIP = '.footer__social, [data-scramble-skip]';
+  /* Controls whose accessible name comes from several children get an explicit
+     label target rather than the whole control. Table rows are included: their
+     symbol cell is the interactive label, but scrambling all seven cells of a
+     row at once would be unreadable. */
+  var SC_LABEL = [
+    [".asset-card", ".asset-card__label"],
+    ["tr[data-selectable]", "td:nth-child(2)"]
+  ];
+  var scRunning = new WeakMap();
+  var scLastPointer = -1e9;
+  var scActive = 0;
+  var scMaxActive = 0;
+
+  function scScrableable(ch) { return /[A-Za-z0-9]/.test(ch); }
+
+  function scLabelFor(el) {
+    var explicit = el.getAttribute("data-scramble");
+    if (explicit) {
+      var found = el.querySelector(explicit);
+      if (found) return found;
+    }
+    for (var i = 0; i < SC_LABEL.length; i++) {
+      if (el.matches(SC_LABEL[i][0])) {
+        var t = el.querySelector(SC_LABEL[i][1]);
+        if (t) return t;
+      }
+    }
+    var kids = Array.prototype.slice.call(el.childNodes);
+    if (kids.length === 1 && kids[0].nodeType === 3 && kids[0].nodeValue.trim()) return el;
+    /* tagName is lowercase for inline SVG in an HTML document, so compare
+       case-insensitively - otherwise an icon next to a wordmark hides the
+       wordmark and the control is silently skipped. */
+    var isIcon = function (n) {
+      return n.tagName.toLowerCase() === "svg" || n.classList.contains("visually-hidden");
+    };
+    var els = kids.filter(function (n) { return n.nodeType === 1 && !isIcon(n); });
+    var withText = els.filter(function (n) { return n.textContent.trim() && !n.querySelector("*"); });
+    if (withText.length === 1 && els.length === 1) return withText[0];
+    return null;
+  }
+
+  function scRun(host, node) {
+    if (!node || skip(host, "M12")) return;
+    var original = node.textContent;
+    if (!original || !/[A-Za-z0-9]/.test(original)) return;
+    var prev = scRunning.get(host);
+    if (prev) prev.cancel();
+
+    var hostLabel = (host.textContent || "").trim();
+    var priorAria = host.getAttribute("aria-label");
+    if (priorAria === null && hostLabel) host.setAttribute("aria-label", hostLabel);
+
+    var chars = original.split("");
+    var lockable = chars.map(scScrableable);
+    var locks = chars.map(function () { return SC_LOCK_MIN + Math.random() * SC_LOCK_SPAN; });
+    var shown = chars.slice();
+    var start = null;
+    var rafId = null;
+    var done = false;
+
+    function finish() {
+      if (done) return;
+      done = true;
+      if (rafId) cancelAnimationFrame(rafId);
+      node.textContent = original;
+      if (priorAria === null) host.removeAttribute("aria-label");
+      else host.setAttribute("aria-label", priorAria);
+      scRunning.delete(host);
+      scActive--;
+    }
+
+    function step(now) {
+      if (start === null) start = now;
+      var elapsed = now - start;
+      for (var i = 0; i < shown.length; i++) {
+        if (!lockable[i]) continue;
+        shown[i] = elapsed >= locks[i]
+          ? chars[i]
+          : SC_CHARS[Math.floor(Math.random() * SC_CHARS.length)];
+      }
+      node.textContent = shown.join("");
+      if (elapsed < SC_MS) { rafId = requestAnimationFrame(step); return; }
+      finish();
+    }
+
+    scRunning.set(host, { cancel: finish });
+    scActive++;
+    if (scActive > scMaxActive) scMaxActive = scActive;
+    rafId = requestAnimationFrame(step);
+  }
+
+  function scBind(root) {
+    var fine = window.matchMedia("(hover: hover) and (pointer: fine)").matches;
+    $$(SC_BIND, root || document).forEach(function (el) {
+      if (el.dataset.scrambleBound === "1") return;
+      if (el.closest(SC_SKIP)) return;
+      var node = scLabelFor(el);
+      if (!node) return;
+      el.dataset.scrambleBound = "1";
+      if (fine) {
+        el.addEventListener("mouseenter", function () { scRun(el, node); });
+      }
+      el.addEventListener("focus", function () {
+        /* run on keyboard focus, not on the focus a click produces */
+        var keyboard;
+        try { keyboard = el.matches(":focus-visible"); }
+        catch (e) { keyboard = performance.now() - scLastPointer > 400; }
+        if (keyboard) scRun(el, node);
+      });
+      el.addEventListener("blur", function () {
+        var a = scRunning.get(el);
+        if (a) a.cancel();
+      });
+      el.addEventListener("pointerdown", function () {
+        var a = scRunning.get(el);
+        if (a) a.cancel();
+      });
+    });
+  }
+
+  document.addEventListener("pointerdown", function () { scLastPointer = performance.now(); }, true);
+
+  window.CPScramble = {
+    bind: scBind,
+    run: function (host, node) { scRun(host, node || scLabelFor(host)); },
+    config: { charset: SC_CHARS, duration: SC_MS, lockMin: SC_LOCK_MIN, lockSpan: SC_LOCK_SPAN, selector: SC_BIND },
+    /* introspection for the verification harness and for anyone debugging
+       a runaway loop: a settled page must report active 0 */
+    stats: function () { return { active: scActive, maxActive: scMaxActive }; },
+    labelFor: scLabelFor
+  };
+
+  /* ---------------------------------------------------------------
      Re-arm when dashboard.js injects content later.
      --------------------------------------------------------------- */
   function observeInjection() {
@@ -386,6 +551,7 @@
         pending = false;
         indexAll();
         runCountUps();
+        scBind(document);
       }, 40);
     }
     targets.forEach(function (sel) {
@@ -404,6 +570,7 @@
     watchPanels();
     watchPulse();
     setupRail();
+    scBind(document);
     observeInjection();
     window.__motionReady = true;
   }

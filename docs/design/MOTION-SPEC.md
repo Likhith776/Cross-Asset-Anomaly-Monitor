@@ -166,6 +166,32 @@ decision is visible rather than silently missing.
 - **Rationale:** confirms interactivity. Applied only on fine pointers so touch never gets
   a stuck hover state.
 
+### M12 — Hover / focus decrypt
+- **Target:** every link, button and tab with a text label — nav links, section action
+  links, asset cards, symbol-bar buttons, incident links, footer links, the skip link, the
+  cookie buttons, and the symbol cell of each alert row (139 of them). **211 of the 213
+  matched controls**; the two skipped have no text of their own.
+- **Values (the reference's own):** glyph set `A–Z`; total **400 ms**; each character locks
+  once at `random × 280 ms + 40 ms`, i.e. **40–320 ms**; one pass per hover, re-armed on the
+  next; non-alphanumeric characters never substituted; the original string written back
+  verbatim on completion, and immediately on `pointerdown`.
+- **Trigger:** `mouseenter` on fine pointers, and `focus` when `:focus-visible` matches
+  (so a click does not fire it).
+- **Rationale:** this is the effect you asked for. On a monitoring console a label that
+  resolves out of noise reads as a readout, not a decoration — and because only chrome
+  animates and only one element animates at a time, it never competes with the data.
+- **Layout safety:** the character count is preserved and the glyphs come from a monospace
+  set, so a scrambled label occupies the same box as the real one. Measured across every
+  measurable control: **0 px width and height delta**, 0 character-count changes, 0 labels
+  left unrestored.
+- **Accessibility:** the host's accessible name is pinned to the real label for the duration
+  of the pass and removed afterwards; the focus ring is untouched; and the whole effect is
+  disabled before first paint when `prefers-reduced-motion` is set.
+- **Deviations from the reference:** the reference binds hover only and excludes running
+  prose and media; ours adds keyboard focus (a keyboard user should get the same feedback)
+  and animates the alert-row symbol cell, but leaves table cells other than the symbol and
+  all non-interactive text untouched.
+
 ## 3. Reduced motion
 
 With `prefers-reduced-motion: reduce`:
@@ -178,6 +204,7 @@ With `prefers-reduced-motion: reduce`:
 | M6 | `animation: false` on all ECharts instances |
 | M9, M10 | No scroll listeners are attached |
 | M11 | Hover depth removed |
+| M12 | No binding at all — hovering or focusing a link leaves its label untouched |
 
 No content is conveyed by motion or colour alone at any setting: every animated value is
 also present as plain text in the DOM.

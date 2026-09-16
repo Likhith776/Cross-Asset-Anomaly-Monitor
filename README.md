@@ -227,9 +227,13 @@ It reloads itself every 5 minutes, matching the publisher cadence.
 The dashboard carries an additive motion layer inspired by the reference site's
 interactions and re-implemented in vanilla CSS/JS:
 
-- section entrance stagger, and a per-character **decode** on section headings
-  (the reference's hover-scramble, moved to a scroll trigger so it also works on
-  touch);
+- section entrance stagger, and a per-character **decode** on section headings;
+- the reference's **hover decrypt** on every link, button and tab: the label is
+  replaced by random uppercase glyphs and resolves back in ~400 ms (glyph set
+  `A-Z`, 400 ms, each character locking at a random 40-320 ms, punctuation never
+  touched, original text restored verbatim). It fires on hover for pointer users and
+  on keyboard focus (`:focus-visible`) for everyone else, and it is one shared
+  utility - `window.CPScramble` - rather than per-element code;
 - the hero paragraph **paints** word-by-word from `#333333` to white as you
   scroll, at the reference's own timings (0.4s per character, 0.02s stagger,
   linear, 0.6 scrub lag);
@@ -247,6 +251,7 @@ has no artwork to parallax.
 | Document | What it covers |
 |---|---|
 | [`MOTION-SPEC.md`](docs/design/MOTION-SPEC.md) | Every effect: target, timings, easing, trigger, rationale, kill switch |
+| [`CODAPRESS-HOVER-DECRYPT-EXPLORATION.md`](docs/design/CODAPRESS-HOVER-DECRYPT-EXPLORATION.md) | How the reference's hover decrypt works, read from its own module and confirmed live |
 | [`MOTION-HANDOFF.md`](docs/design/MOTION-HANDOFF.md) | Where the code lives, how to disable or tune it, the invariants it keeps |
 | [`CODAPRESS-MOTION-INVENTORY.md`](docs/design/CODAPRESS-MOTION-INVENTORY.md) | The reference site's motion, quoted from its own bundled modules |
 
