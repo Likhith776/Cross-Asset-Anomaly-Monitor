@@ -187,6 +187,11 @@ decision is visible rather than silently missing.
 - **Accessibility:** the host's accessible name is pinned to the real label for the duration
   of the pass and removed afterwards; the focus ring is untouched; and the whole effect is
   disabled before first paint when `prefers-reduced-motion` is set.
+- **Performance:** measured with up to **4 decrypts running concurrently** (hovering a different
+  control every 60 ms, faster than a 400 ms pass completes): **100 % of frames within one vsync,
+  0 frames dropped, 0 long tasks** over a 6 s sample — identical to the same page scrolled with no
+  hovering (361–369 frames, p50 16.7 ms, p95 16.7–16.8 ms, max 16.8 ms). After the storm settles the
+  utility reports `{active: 0, maxActive: 4}`, so no loop or timer is left behind.
 - **Deviations from the reference:** the reference binds hover only and excludes running
   prose and media; ours adds keyboard focus (a keyboard user should get the same feedback)
   and animates the alert-row symbol cell, but leaves table cells other than the symbol and
