@@ -205,13 +205,12 @@ Both pages are static files — no framework, no bundler, no build step.
 
 ### Landing page — `/`
 
-The project front door. A dithered greyscale plasma field carries the headline
-(rendered inside the WebGL canvas, with the real `<h1>` retained for assistive
-technology and as the no-WebGL fallback), followed by the lede, a live
-**Tracked market** arc carousel of every instrument with its real sparkline,
-price, 1-month return and z-score, the **Latest signal** feature block, a
-**Method** grid explaining the four pipeline stages, the **Recent incidents**
-record grid, and the footer.
+The project's own landing page, published unchanged from
+[`cross-asset-anomaly-monitor-v6.html`](cross-asset-anomaly-monitor-v6.html).
+Its own motion language — the live canvas field, the HUD panels and the
+heartbeat — is its own; nothing was layered on top of it. The only edit is that
+its four "Live dashboard" links now point at `dashboard.html`, because the site
+root is what the landing page itself is served from.
 
 ### Dashboard — `/dashboard.html`
 
@@ -222,6 +221,38 @@ rolling detector precision, the incident log, and links to every raw JSON
 endpoint. Each panel resolves to an explicit **ready / empty / error** state, and
 a stale-data warning appears if the freshest snapshot is older than 15 minutes.
 It reloads itself every 5 minutes, matching the publisher cadence.
+
+### Motion
+
+The dashboard carries an additive motion layer inspired by the reference site's
+interactions and re-implemented in vanilla CSS/JS:
+
+- section entrance stagger, and a per-character **decode** on section headings
+  (the reference's hover-scramble, moved to a scroll trigger so it also works on
+  touch);
+- the hero paragraph **paints** word-by-word from `#333333` to white as you
+  scroll, at the reference's own timings (0.4s per character, 0.02s stagger,
+  linear, 0.6 scrub lag);
+- charts **develop** into view with a clip-path wipe and a surface scale, and the
+  plot then draws itself over 900ms;
+- asset cards stagger in and their prices count up — always landing on the exact
+  published value;
+- a live pulse when a new snapshot lands, a 1px scroll-progress rail, and
+  pointer-only hover depth.
+
+Every effect is mapped to a specific element with a stated rationale, and one
+(the reference's artwork parallax) was deliberately dropped because the dashboard
+has no artwork to parallax.
+
+| Document | What it covers |
+|---|---|
+| [`MOTION-SPEC.md`](docs/design/MOTION-SPEC.md) | Every effect: target, timings, easing, trigger, rationale, kill switch |
+| [`MOTION-HANDOFF.md`](docs/design/MOTION-HANDOFF.md) | Where the code lives, how to disable or tune it, the invariants it keeps |
+| [`CODAPRESS-MOTION-INVENTORY.md`](docs/design/CODAPRESS-MOTION-INVENTORY.md) | The reference site's motion, quoted from its own bundled modules |
+
+Disable the whole layer with `?motion=off`, `data-motion="off"` on `<html>`,
+or by deleting the two asset tags. `prefers-reduced-motion: reduce` disables it
+automatically. The layer is two files totalling 22.6 KB — 3.7% of the page.
 
 ### Design system
 
@@ -369,7 +400,8 @@ the **BACKTEST-REPORT** workflow.
 - [x] Lead-lag attribution and macro-release context on alerts
 - [x] Human labels and a published rolling precision metric
 - [x] Zero-infrastructure publishing from scheduled CI
-- [x] Design-system revamp of the landing page and dashboard
+- [x] Design-system revamp of the dashboard
+- [x] Additive motion layer on the dashboard, with a full disable path
 - [ ] Self-hosted JetBrains Mono instead of the Google Fonts CDN
 - [ ] Per-pull-request preview deployments
 - [ ] Alert subscriptions (email / webhook) as an opt-in

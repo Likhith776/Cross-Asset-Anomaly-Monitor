@@ -11,6 +11,22 @@
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="assets/css/codapress.css">
 <link rel="stylesheet" href="assets/css/dashboard.css">
+<link rel="stylesheet" href="assets/css/motion.css">
+<script>
+/* Motion layer loader. Decides before first paint whether the animated
+   pre-states may be applied at all: reduced-motion and ?motion=off both
+   opt out completely, and a 3s failsafe releases the pre-states if
+   motion.js never runs. */
+(function () {
+  var r = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var off = /[?&]motion=off/.test(window.location.search);
+  if (r || off) { document.documentElement.setAttribute('data-motion', 'off'); return; }
+  document.documentElement.classList.add('motion-armed');
+  setTimeout(function () {
+    if (!window.__motionReady) document.documentElement.classList.remove('motion-armed');
+  }, 3000);
+})();
+</script>
 <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js" defer></script>
 </head>
 <body>
@@ -272,5 +288,6 @@
 <script src="assets/js/nav.js" defer></script>
 <script src="assets/js/cookie.js" defer></script>
 <script src="assets/js/dashboard.js" defer></script>
+<script src="assets/js/motion.js" defer></script>
 </body>
 </html>

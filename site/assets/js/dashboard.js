@@ -72,6 +72,15 @@
     return {
       backgroundColor: "transparent",
       textStyle: { fontFamily: "'JetBrains Mono', monospace", color: "#8F8F8F" },
+      /* M6 - chart draw-on. Presentation only: the series data is
+         unchanged. The reference reveals its content progressively; here
+         the plot draws once over 900ms and then updates quickly (300ms)
+         so filter changes stay responsive. */
+      animation: true,
+      animationDuration: 900,
+      animationEasing: "cubicOut",
+      animationDurationUpdate: 300,
+      animationEasingUpdate: "cubicOut",
       tooltip: {
         backgroundColor: "#0a0a0a",
         borderColor: "#575757",
@@ -80,6 +89,13 @@
     };
   }
   function applyAxisTheme(opt) {
+    /* stagger the draw across series so multi-series plots cascade */
+    if (opt.series && !opt.animationDelay) {
+      var list = Array.isArray(opt.series) ? opt.series : [opt.series];
+      if (list.length > 1) {
+        list.forEach(function (s, i) { if (s.animationDelay === undefined) s.animationDelay = i * 90; });
+      }
+    }
     ["xAxis", "yAxis"].forEach(function (key) {
       var ax = opt[key];
       if (!ax) return;

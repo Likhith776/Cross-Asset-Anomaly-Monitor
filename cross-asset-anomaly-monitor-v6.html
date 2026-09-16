@@ -1,269 +1,1106 @@
 <!DOCTYPE html>
-<html lang="en-GB">
+<html lang="en">
 <head>
-<meta charset="utf-8">
-<meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="theme-color" content="#000000">
-<title>Cross-Asset Anomaly Monitor &mdash; unattended anomaly detection across seven markets</title>
-<meta name="description" content="Cross-Asset Anomaly Monitor watches equities, crypto, commodities, FX and rates with four independent detectors, and publishes every caught anomaly from scheduled CI. No server, no downtime.">
-<meta property="og:title" content="Cross-Asset Anomaly Monitor">
-<meta property="og:description" content="Unattended anomaly detection across seven markets, published live from scheduled CI.">
-<meta property="og:type" content="website">
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<meta name="theme-color" content="#050605" />
+<title>Cross-Asset Anomaly Monitor — real-time detection across seven markets</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="assets/css/codapress.css">
+<link href="https://fonts.googleapis.com/css2?family=Anton&family=Space+Mono:wght@400;700&display=swap" rel="stylesheet">
+<script>document.documentElement.classList.add('js');</script>
+<style>
+  /* ================================================================
+     v6 — REBUILT AROUND THE APPROVED CONCEPT 3 SYSTEM
+     (concept3-merged.html, round 5). The visual language:
+     · full-bleed live 7-line canvas field — the primary visual,
+       bright enough to carry the page (not a 2% texture)
+     · Anton for display (uppercase, tight), Space Mono for
+       everything else — data, labels, nav, body
+     · duotone signal colors: lime #c7f24e (up / normal / watching)
+       and coral #ff5b4d (down / flagged / anomaly) — both used
+       throughout, not just in the ticker
+     · HUD panels as the card language: bordered, semi-transparent,
+       blinking status dot, mono label
+     · glitch/RGB-split as the headline emphasis move
+     · continuous autoplay marquees (ticker + footer stack)
+     · ONE shared anomaly event the whole page reacts to (the
+       heartbeat): canvas line flags + ping, a HUD panel flips to
+       FLAGGED, the hero headline glitches, and the HUD panel
+       nearest the reader's current section flashes — see the
+       "heartbeat" JS block
+     All content, copy, links, and factual claims carried over
+     byte-for-byte from v5. Fallbacks (reduced motion / touch /
+     CDN loss / no-JS) detailed in DESIGN-RATIONALE-v6.md.
+     ================================================================ */
+  :root{
+    --bg:#050605;
+    --bg-2:#0a0c0a;
+    --panel:rgba(8,10,8,.65);
+    --panel-solid:#0e100e;
+    --line:#2a2f2b;
+    --line-2:#3a423b;
+    --ink:#eee;
+    --muted:#aab3ac;
+    --faint:#8a978c;
+    --up:#c7f24e;            /* lime — up / normal / watching */
+    --dn:#ff5b4d;            /* coral — down / flagged / anomaly */
+    --cyan:#4ecfe0;          /* RGB-split ghost channel only */
+    --font-d:'Anton',Impact,'Arial Narrow',sans-serif;
+    --font-m:'Space Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+    --gutter:5.5vw;
+    --ease:cubic-bezier(.4,0,.2,1);
+  }
+  *{margin:0;padding:0;box-sizing:border-box;}
+  html{scroll-behavior:smooth;}
+  html.lenis{scroll-behavior:auto;}
+  body{
+    background:var(--bg);color:var(--ink);
+    font-family:var(--font-m);font-size:15px;line-height:1.55;
+    overflow-x:hidden;-webkit-font-smoothing:antialiased;
+  }
+  a{color:inherit;text-decoration:none;}
+  ::selection{background:var(--up);color:#0a0c0a;}
+  :focus-visible{outline:2px solid var(--up);outline-offset:3px;}
+  [hidden]{display:none!important;}
+  .sr-only{position:absolute;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0 0 0 0);white-space:nowrap;border:0;}
+
+  .skip-link{position:fixed;top:-100px;left:16px;z-index:300;background:var(--up);color:#0a0c0a;
+    font-size:.8rem;letter-spacing:.1em;text-transform:uppercase;padding:.6em 1em;transition:top .2s var(--ease);}
+  .skip-link:focus{top:16px;}
+
+  /* ---------- page-load overlay (concept3 has none; v2–v5 lifted a
+     curtain — here the hero IS the opening frame, so we only guard
+     against FOUC on the canvas-free no-JS render) ---------- */
+  .load-overlay{display:none;}
+
+  /* ---------- grain (concept3) ---------- */
+  .grain{position:absolute;inset:0;z-index:1;pointer-events:none;opacity:.05;
+    background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='0.85' numOctaves='2' stitchTiles='stitch'/%3E%3CfeColorMatrix type='saturate' values='0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");}
+
+  /* ---------- nav ---------- */
+  .nav{
+    position:fixed;top:0;left:0;right:0;z-index:90;
+    padding:1.1rem var(--gutter);display:flex;align-items:center;justify-content:space-between;gap:1.5rem;
+    background:linear-gradient(to bottom,rgba(5,6,5,.85),rgba(5,6,5,0));
+  }
+  .brand{font-size:.8rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--ink);
+    transition:color .1s var(--ease);}
+  .brand span{color:var(--up);}
+  .brand:hover,.brand:focus-visible{color:var(--up);}
+  .nav-links{display:flex;gap:2rem;list-style:none;}
+  .nav-links a{font-size:.78rem;letter-spacing:.06em;text-transform:uppercase;color:var(--muted);
+    transition:color .1s var(--ease);}
+  .nav-links a:hover,.nav-links a:focus-visible{color:var(--up);}
+
+  /* ---------- buttons : terminal chrome, lime/coral duotone ---------- */
+  .btn{
+    position:relative;display:inline-flex;align-items:center;overflow:hidden;
+    font-size:.78rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+    padding:13px 22px;border:1px solid var(--line-2);color:var(--ink);
+    transition:color .15s var(--ease),border-color .15s var(--ease),background-color .15s var(--ease),box-shadow .15s var(--ease);
+  }
+  .btn:hover{border-color:var(--up);color:var(--up);box-shadow:0 0 18px rgba(199,242,78,.2);}
+  .btn-primary{background:var(--up);color:#0a0c0a;border-color:var(--up);}
+  .btn-primary:hover{color:#0a0c0a;box-shadow:0 0 26px rgba(199,242,78,.45);}
+  .btn .lbl{position:relative;z-index:1;}
+
+  .menu-btn{display:none;font-family:inherit;font-size:.78rem;font-weight:700;letter-spacing:.1em;text-transform:uppercase;
+    background:none;border:1px solid var(--line-2);color:var(--ink);padding:.6em 1em;cursor:pointer;
+    transition:color .1s var(--ease),border-color .1s var(--ease);}
+  .menu-btn:hover,.menu-btn:focus-visible{color:var(--up);border-color:var(--up);}
+
+  /* ---------- HUD panel : THE card language (concept3) ---------- */
+  .hud{
+    position:relative;border:1px solid var(--line);background:var(--panel);
+    padding:10px 12px;backdrop-filter:blur(2px);
+    font-size:10px;letter-spacing:.08em;color:var(--faint);text-transform:uppercase;
+    transition:border-color .25s var(--ease),box-shadow .25s var(--ease);
+  }
+  .hud .dot{width:6px;height:6px;border-radius:50%;background:var(--faint);display:inline-block;margin-right:5px;vertical-align:1px;}
+  .hud b.tag{color:var(--up);font-weight:700;}
+  .hud.flag{border-color:var(--up);box-shadow:0 0 22px rgba(199,242,78,.25);}
+  .hud.flag .dot{background:var(--up);box-shadow:0 0 6px var(--up);animation:blink .8s infinite;}
+  .hud.flag b.tag{color:var(--up);}
+  @keyframes blink{0%,100%{opacity:1;}50%{opacity:.3;}}
+
+  /* corner HUD panels around the hero (asset classes) */
+  .corner-hud{position:absolute;z-index:3;width:150px;}
+  .ch1{top:14%;left:4%;}
+  .ch2{top:17%;right:5%;}
+  .ch3{bottom:26%;left:5%;}
+  .ch4{bottom:10%;right:6%;}
+
+  /* ---------- hero : full-bleed canvas field ---------- */
+  .hero{position:relative;min-height:100svh;overflow:hidden;
+    display:flex;flex-direction:column;}
+  canvas#field{position:absolute;inset:0;width:100%;height:100%;}
+  .hero-overlay{position:relative;z-index:2;flex:1;display:flex;flex-direction:column;
+    justify-content:center;padding:7rem var(--gutter) 2rem;}
+  .kicker{font-size:11px;letter-spacing:.25em;text-transform:uppercase;color:var(--faint);margin-bottom:16px;
+    display:flex;align-items:center;gap:.7em;}
+  .kicker b{color:var(--up);letter-spacing:.25em;}
+  .kicker .dot{width:7px;height:7px;border-radius:50%;background:var(--up);flex:none;animation:blink 2.2s infinite;}
+  h1.title{
+    font-family:var(--font-d);text-transform:uppercase;line-height:.94;
+    font-size:clamp(2.6rem,7.2vw,7.5rem);letter-spacing:-.01em;position:relative;
+    mix-blend-mode:difference;color:#fff;max-width:14ch;
+  }
+  h1.title span{position:relative;display:block;}
+  h1.title span::before,h1.title span::after{content:attr(data-text);position:absolute;left:0;top:0;width:100%;opacity:0;}
+  h1.title span::before{color:var(--dn);transform:translate(3px,0);mix-blend-mode:screen;}
+  h1.title span::after{color:var(--cyan);transform:translate(-3px,0);mix-blend-mode:screen;}
+  .glitching span::before{opacity:.85;animation:g1 .35s steps(2);}
+  .glitching span::after{opacity:.85;animation:g2 .35s steps(2);}
+  @keyframes g1{0%{clip-path:inset(10% 0 60% 0);}50%{clip-path:inset(60% 0 5% 0);}100%{clip-path:inset(0 0 0 0);}}
+  @keyframes g2{0%{clip-path:inset(50% 0 10% 0);}50%{clip-path:inset(5% 0 70% 0);}100%{clip-path:inset(0 0 0 0);}}
+  .lede{margin-top:22px;max-width:540px;font-size:.82rem;line-height:1.75;color:var(--muted);}
+  .hero-ctas{display:flex;gap:14px;margin-top:30px;flex-wrap:wrap;}
+
+  .scroll-hint{position:absolute;right:var(--gutter);bottom:110px;z-index:3;
+    font-size:.68rem;letter-spacing:.2em;text-transform:uppercase;color:var(--ink);opacity:.7;}
+  @media (max-height:860px), (max-width:820px){.scroll-hint{display:none;}}
+
+  /* ---------- marquee bands : continuous autoplay (concept3) ---------- */
+  .marquee-band{position:relative;z-index:3;background:var(--bg-2);
+    border-top:1px solid var(--line);border-bottom:1px solid var(--line);
+    overflow:hidden;padding:12px 0;white-space:nowrap;}
+  .marquee-track{display:inline-flex;animation:autoscroll 22s linear infinite;}
+  .marquee-track span{font-weight:700;font-size:14px;padding:0 26px;border-right:1px solid var(--line);}
+  .up{color:var(--up);} .dn{color:var(--dn);}
+  @keyframes autoscroll{from{transform:translateX(0);}to{transform:translateX(-50%);}}
+  /* stack tags (footer) share the band */
+  .marquee-band .stack-tag{font-weight:400;font-size:12px;letter-spacing:.06em;color:var(--muted);
+    border:1px solid var(--line);background:var(--panel-solid);padding:8px 14px;margin:0 10px;}
+
+  /* ---------- sections : HUD-panel framing everywhere ---------- */
+  .section{position:relative;padding:clamp(4.5rem,10vh,7rem) var(--gutter);}
+  .kicker-line{display:flex;align-items:center;gap:.8em;margin-bottom:1.4rem;
+    font-size:11px;letter-spacing:.25em;text-transform:uppercase;color:var(--faint);}
+  .kicker-line .idx{color:var(--up);}
+  h2{
+    font-family:var(--font-d);text-transform:uppercase;line-height:.98;letter-spacing:.005em;
+    font-size:clamp(1.9rem,3.6vw,3.4rem);color:var(--ink);max-width:22ch;position:relative;
+  }
+  /* RGB-split emphasis layers on section headlines (same move as hero,
+     triggered on scroll-enter and by the page heartbeat) */
+  h2 span{position:relative;display:inline-block;}
+  h2 span::before,h2 span::after{content:attr(data-text);position:absolute;left:0;top:0;width:100%;opacity:0;}
+  h2 span::before{color:var(--dn);transform:translate(2px,0);mix-blend-mode:screen;}
+  h2 span::after{color:var(--cyan);transform:translate(-2px,0);mix-blend-mode:screen;}
+  .glitching h2 span::before,.section-head.glitching span::before,
+  h2.glitching span::before{opacity:.85;animation:g1 .35s steps(2);}
+  .glitching h2 span::after,.section-head.glitching span::after,
+  h2.glitching span::after{opacity:.85;animation:g2 .35s steps(2);}
+  .section-lede{color:var(--muted);max-width:38rem;font-size:.85rem;line-height:1.75;margin-top:1.4rem;}
+
+  /* ---------- stats : HUD strip ---------- */
+  .stats{display:grid;grid-template-columns:repeat(4,1fr);gap:10px;
+    padding:0 var(--gutter);margin-top:2.5rem;}
+  .stat{padding:1.4rem 1.2rem;}
+  .stat .num{font-family:var(--font-d);font-size:clamp(2.2rem,3.4vw,3.6rem);line-height:1;color:var(--up);}
+  .stat .label{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);margin-top:.8rem;line-height:1.6;}
+
+  /* ---------- detection paths : HUD panels ---------- */
+  .paths{display:grid;grid-template-columns:1fr 1fr;gap:10px;margin-top:3rem;}
+  .path{padding:0;display:flex;flex-direction:column;}
+  .path .ph{padding:12px 14px;border-bottom:1px solid var(--line);
+    display:flex;align-items:center;gap:8px;justify-content:space-between;}
+  .path .ph .name{font-size:11px;font-weight:700;letter-spacing:.1em;text-transform:uppercase;color:var(--ink);}
+  .path .ph .mode{font-size:10px;letter-spacing:.08em;color:var(--up);}
+  .path .body{padding:1.5rem 1.4rem 1.7rem;flex:1;}
+  .path .body h3{font-family:var(--font-d);text-transform:uppercase;font-size:1.35rem;line-height:1.05;margin-bottom:.8rem;}
+  .path .body>p{color:var(--muted);font-size:.8rem;line-height:1.7;margin-bottom:1.5rem;max-width:34ch;}
+  .path ul{list-style:none;}
+  .path li{font-size:.78rem;color:var(--ink);padding:.7rem 0;border-top:1px solid var(--line);
+    display:flex;gap:.9rem;line-height:1.5;}
+  .path li .n{color:var(--up);}
+  .path li .n.bad{color:var(--dn);}
+  .footnote{color:var(--muted);font-size:.8rem;line-height:1.75;max-width:62ch;
+    border-top:1px solid var(--line);padding-top:1.4rem;margin-top:3rem;}
+
+  /* ================================================================
+     PINNED ARCHITECTURE SEQUENCE (carried from v4, restyled):
+     both views stacked in one grid cell, HUD boxes, lime connectors.
+     Beats identical to v4: 0–.3 rows assemble, .3–.5 connectors
+     draw, .5–.8 slim→full morph, .8–1 settle. Inert without
+     .pin-mode (fine pointer + motion + GSAP only); everyone else
+     keeps click-to-switch tabs.
+     ================================================================ */
+  .tabs{display:flex;gap:2rem;flex-wrap:wrap;margin:2.6rem 0 2rem;}
+  .tab{background:none;border:none;cursor:pointer;padding:0;
+    font-family:inherit;font-size:.78rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--faint);transition:color .1s var(--ease);}
+  .tab .b{color:var(--up);transition:color .1s var(--ease);}
+  .tab:hover,.tab:focus-visible{color:var(--ink);}
+  .tab[aria-selected="true"]{color:var(--ink);}
+  .diagram{font-size:.75rem;color:var(--muted);overflow-x:auto;padding-bottom:1rem;position:relative;}
+  .flowrow{display:flex;align-items:center;gap:.7rem;flex-wrap:wrap;margin-bottom:.7rem;}
+  .box{border:1px solid var(--line);background:var(--panel);color:var(--ink);
+    padding:.7rem .9rem;white-space:nowrap;backdrop-filter:blur(2px);}
+  .box.hot{border-color:var(--up);box-shadow:0 0 16px rgba(199,242,78,.18);}
+  .arrow{color:var(--faint);}
+  .diagram .footnote{border-top:1px solid var(--line);margin-top:1.6rem;padding-top:1rem;font-size:.72rem;line-height:1.7;}
+  .pin-mode .diagram{display:grid;position:relative;isolation:isolate;}
+  .pin-mode .arch-view{grid-area:1/1;z-index:1;}
+  .connector-svg{position:absolute;inset:0;width:100%;height:100%;z-index:-1;pointer-events:none;}
+  .connector-svg path{fill:none;stroke:rgba(199,242,78,.5);stroke-width:1;vector-effect:non-scaling-stroke;}
+
+  /* ---------- deployment : HUD panels on lightened panel bg ---------- */
+  .section-deploy{background:var(--bg-2);}
+  .grid3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:3rem;}
+  .card{padding:0;display:flex;flex-direction:column;}
+  .card .ph{padding:10px 12px;border-bottom:1px solid var(--line);
+    font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--faint);}
+  .card .body{padding:1.4rem 1.3rem 1.6rem;flex:1;}
+  .card h4{font-family:var(--font-d);text-transform:uppercase;font-size:1.15rem;line-height:1.05;margin-bottom:.7rem;}
+  .card p{font-size:.78rem;line-height:1.7;color:var(--muted);}
+  .card .metric{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--up);margin-top:1.1rem;}
+
+  /* ---------- quickstart code ---------- */
+  .code-block{background:var(--panel-solid);border:1px solid var(--line);
+    padding:1.4rem 1.5rem;font-size:.76rem;color:#c9d1d2;overflow-x:auto;white-space:pre;line-height:1.8;}
+  .code-block .c{color:var(--faint);}
+  .code-block .g{color:var(--up);}
+  .code-line{display:block;}
+
+  /* ---------- footer ---------- */
+  footer{border-top:1px solid var(--line);position:relative;}
+  .foot-inner{padding:0 var(--gutter);}
+  .foot-links{display:flex;justify-content:space-between;flex-wrap:wrap;gap:1.4rem;
+    margin:2.5rem 0 0;font-size:.78rem;}
+  .foot-links a{color:var(--muted);transition:color .1s var(--ease);}
+  .foot-links a:hover{color:var(--up);}
+  .foot-bottom{display:flex;justify-content:space-between;flex-wrap:wrap;gap:.8rem;
+    margin-top:3rem;padding:1.4rem var(--gutter) 2rem;border-top:1px solid var(--line);
+    font-size:.7rem;letter-spacing:.04em;color:var(--faint);}
+
+  /* ---------- mobile fullscreen menu ---------- */
+  .mobile-menu{position:fixed;inset:0;z-index:200;background:var(--bg);
+    display:flex;flex-direction:column;justify-content:space-between;
+    padding:1.4rem var(--gutter) 2.5rem;
+    opacity:0;transform:translateY(-2%);transition:opacity .35s var(--ease),transform .35s var(--ease);}
+  .mobile-menu.open{opacity:1;transform:none;}
+  .mobile-menu .mm-top{display:flex;justify-content:space-between;align-items:center;}
+  .mobile-menu ul{list-style:none;display:flex;flex-direction:column;gap:.4rem;}
+  .mobile-menu ul a{display:block;font-family:var(--font-d);text-transform:uppercase;
+    font-size:clamp(2rem,9vw,3.4rem);line-height:1.12;color:var(--ink);transition:color .1s var(--ease);}
+  .mobile-menu ul a span{font-family:var(--font-m);font-size:.8rem;color:var(--up);vertical-align:super;margin-right:.5rem;}
+  .mobile-menu ul a:hover{color:var(--up);}
+  .mobile-menu .mm-foot{font-size:.72rem;color:var(--faint);text-transform:uppercase;letter-spacing:.05em;}
+
+  /* ---------- responsive ---------- */
+  @media (max-width:1024px){
+    .paths,.grid3{gap:10px;}
+  }
+  @media (max-width:820px){
+    :root{--gutter:5.97vw;}
+    .nav-links{display:none;}
+    .nav .btn{display:none;}
+    .menu-btn{display:block;}
+    .paths,.grid3{grid-template-columns:1fr;}
+    .stats{grid-template-columns:repeat(2,1fr);}
+    .foot-links{flex-direction:column;gap:1rem;}
+    .foot-bottom{flex-direction:column;}
+    .corner-hud{width:120px;font-size:9px;}
+    .ch2{top:14%;} .ch4{bottom:9%;}
+    .hero-overlay{justify-content:flex-end;padding-bottom:1.6rem;}
+  }
+
+  /* ---------- reduced motion ----------
+     no glitch, no canvas animation (no canvas loop at all — one frame
+     or nothing), no blinking dots, marquees freeze to a static strip,
+     heartbeat never starts. Full content stays visible. */
+  @media (prefers-reduced-motion:reduce){
+    html{scroll-behavior:auto;}
+    .dot,.hud.flag .dot{animation:none;}
+    .marquee-track{animation:none;}
+    *{animation-duration:.01ms!important;animation-iteration-count:1!important;transition-duration:.01ms!important;}
+  }
+</style>
 </head>
 <body>
-<a class="skip-link" href="#main">Skip to main content</a>
 
-<header class="header">
-  <div class="header__inner">
-    <a class="header__brand" href="index.html" aria-label="Cross-Asset Anomaly Monitor &mdash; home">
-      <svg class="brandmark" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
-        <rect class="brandmark__box" x="0" y="0" width="24" height="24"></rect>
-        <path class="brandmark__glyph" d="M15.6 8.2a4.6 4.6 0 1 0 0 7.6M7 4.6h10M7 19.4h10" fill="none" stroke="#000" stroke-width="2.1" stroke-linecap="square"></path>
-      </svg>
-      <span class="header__wordmark">Cross-Asset Monitor</span>
-    </a>
-    <nav class="header__nav" aria-label="Primary">
-      <a class="nav-link" href="dashboard.html">Dashboard</a>
-      <a class="nav-link" href="#market">Market</a>
-      <a class="nav-link" href="#method">Method</a>
-      <a class="nav-link" href="https://github.com/Likhith776/Cross-Asset-Anomaly-Monitor" rel="noopener">GitHub</a>
-    </nav>
-    <button class="header__menu" type="button" aria-expanded="false" aria-controls="mobile-menu" aria-label="Open menu">
-      <span class="header__menu-icon" aria-hidden="true">
-        <span class="header__menu-bar"></span>
-        <span class="header__menu-bar"></span>
-        <span class="header__menu-bar"></span>
-      </span>
-    </button>
+<a class="skip-link" href="#main">Skip to content</a>
+
+<header class="nav">
+  <a class="brand" href="#top" data-intro>CROSS-ASSET<span>&nbsp;/&nbsp;MONITOR</span></a>
+  <nav aria-label="Primary">
+    <ul class="nav-links">
+      <li data-intro><a href="#how">How it works</a></li>
+      <li data-intro><a href="#architecture">Architecture</a></li>
+      <li data-intro><a href="#deploy">Deployment</a></li>
+    </ul>
+  </nav>
+  <div class="nav-cta" data-intro>
+    <a class="btn btn-primary btn-sm" href="dashboard.html" target="_blank" rel="noopener"><span class="lbl">Live dashboard ↗</span></a>
+    <button class="menu-btn" id="menuBtn" aria-expanded="false" aria-controls="mobileMenu">Menu</button>
   </div>
 </header>
 
-<div class="mobile-menu" id="mobile-menu">
-  <nav class="mobile-menu__nav" aria-label="Mobile">
-    <a class="mobile-menu__link" href="dashboard.html">Dashboard</a>
-    <a class="mobile-menu__link" href="#market">Market</a>
-    <a class="mobile-menu__link" href="#method">Method</a>
-    <a class="mobile-menu__link" href="#incidents">Incidents</a>
-    <a class="mobile-menu__link" href="https://github.com/Likhith776/Cross-Asset-Anomaly-Monitor" rel="noopener">GitHub</a>
+<div class="mobile-menu" id="mobileMenu" hidden>
+  <div class="mm-top">
+    <span class="brand">CROSS-ASSET<span>&nbsp;/&nbsp;MONITOR</span></span>
+    <button class="menu-btn" id="menuClose" aria-label="Close menu">Close</button>
+  </div>
+  <nav aria-label="Mobile">
+    <ul>
+      <li><a href="#how"><span>[ 01 ]</span>How it works</a></li>
+      <li><a href="#architecture"><span>[ 02 ]</span>Architecture</a></li>
+      <li><a href="#deploy"><span>[ 03 ]</span>Deployment</a></li>
+      <li><a href="#quickstart"><span>[ 04 ]</span>Run it yourself</a></li>
+      <li><a href="dashboard.html" target="_blank" rel="noopener"><span>[ ↗ ]</span>Live dashboard</a></li>
+    </ul>
   </nav>
-  <p class="mobile-menu__meta" data-updated>no snapshot published yet</p>
+  <p class="mm-foot">Real anomalies. Real markets. No demo mode.</p>
 </div>
 
 <main id="main">
 
-  <!-- Hero: the headline is composited inside the dithered plasma field -->
-  <section class="home-hero" data-dither-hero data-hero-lines="CROSS-ASSET|ANOMALY|MONITOR" aria-labelledby="hero-title">
-    <div class="dither-hero">
-      <canvas class="dither-hero__canvas" aria-hidden="true"></canvas>
-      <div class="dither-hero__vignette" aria-hidden="true"></div>
-    </div>
-    <div class="home-hero__title">
-      <p class="home-hero__eyebrow" data-hero-status>awaiting first published snapshot</p>
-      <h1 id="hero-title">Cross-Asset Anomaly Monitor</h1>
-    </div>
-    <p class="home-hero__scroll" aria-hidden="true">Scroll &darr;</p>
-  </section>
+  <!-- ================= HERO : full-bleed field + HUD corners ================= -->
+  <section class="hero" id="top" aria-label="Introduction">
+    <canvas id="field" aria-hidden="true"></canvas>
+    <div class="grain" aria-hidden="true"></div>
 
-  <!-- Lede -->
-  <section class="home-lede container">
-    <p data-reveal>Equities, crypto, commodities, FX and rates, watched together. Four independent
-      detectors run over the same live quote stream, cross-check each other, and publish what they
-      catch &mdash; prices, features, correlations, incidents and precision &mdash; straight from a
-      scheduled CI job. No server to keep warm, no downtime to explain, no paid tier to outgrow.</p>
-    <p class="home-lede__meta" data-reveal>
-      <span data-updated>no snapshot published yet</span>
-      <span><a class="link-underline" href="dashboard.html">Open the live dashboard &rarr;</a></span>
-    </p>
-  </section>
+    <div class="corner-hud hud ch1" id="hud-SPX" aria-hidden="true"><span class="dot"></span>SPX · EQUITIES<br><b class="tag">watching</b></div>
+    <div class="corner-hud hud ch2" id="hud-BTC" aria-hidden="true"><span class="dot"></span>BTC-USD · CRYPTO<br><b class="tag">watching</b></div>
+    <div class="corner-hud hud ch3" id="hud-XAU" aria-hidden="true"><span class="dot"></span>XAU · COMMODITIES<br><b class="tag">watching</b></div>
+    <div class="corner-hud hud ch4" id="hud-US10Y" aria-hidden="true"><span class="dot"></span>US10Y · RATES<br><b class="tag">watching</b></div>
 
-  <!-- Tracked market: the arc carousel -->
-  <section class="section container" id="market">
-    <div class="section-header" data-reveal>
-      <div>
-        <span class="section-header__eyebrow">01 &mdash; Universe</span>
-        <h2 class="section-header__title">Tracked market</h2>
-      </div>
-      <a class="section-header__action" href="dashboard.html">All instruments &rarr;</a>
-    </div>
-    <div class="arc-shell">
-      <div class="arc-carousel" data-arc-carousel aria-label="Tracked instruments">
-        <div class="arc-carousel__viewport">
-          <div class="arc-carousel__ring" data-arc-ring>
-            <div class="empty-state" style="width:min(560px,80vw);margin:0 auto">Loading the tracked universe&hellip;</div>
-          </div>
-        </div>
+    <div class="hero-overlay">
+      <p class="kicker"><span class="dot" aria-hidden="true"></span><b>Live</b> — detection pipeline runs every 30 seconds, published every 30 minutes</p>
+      <h1 class="title" id="headline"><span data-text="Markets don't move alone.">Markets don't move alone.</span><span data-text="This watches the space between them.">This watches the space between them.</span></h1>
+      <p class="lede">A real-time anomaly detection system that tracks seven asset classes — equities, crypto, commodities, FX, and rates — and flags what only shows up when you look across them at once: correlation breaks, volatility surges, and moves no single chart would explain.</p>
+      <div class="hero-ctas">
+        <a class="btn btn-primary" href="dashboard.html#incidents" target="_blank" rel="noopener"><span class="lbl">View live incident log ↗</span></a>
+        <a class="btn" href="https://github.com/Likhith776/Cross-Asset-Anomaly-Monitor" target="_blank" rel="noopener"><span class="lbl">Read the source ↗</span></a>
       </div>
     </div>
+    <div class="scroll-hint" aria-hidden="true">Scroll ↓</div>
+    <p class="sr-only">Illustrative sample quotes for the seven tracked instruments: SPX 6,481.20 up 0.34 percent; NDX 23,904.10 up 0.51 percent; BTC-USD 112,340 down 1.12 percent; XAU 3,412.80 up 0.18 percent; WTI 64.22 down 0.47 percent; EURUSD 1.0863 up 0.06 percent; US10Y 4.128 percent down 0.02.</p>
   </section>
 
-  <!-- Latest signal: the featured block -->
-  <section class="section container" id="signal">
-    <div class="section-header" data-reveal>
-      <div>
-        <span class="section-header__eyebrow">02 &mdash; Signal</span>
-        <h2 class="section-header__title">Latest signal</h2>
-      </div>
-      <a class="section-header__action" href="dashboard.html#anomalies">All alerts &rarr;</a>
+  <!-- ================= TICKER : continuous autoplay marquee ================= -->
+  <div class="marquee-band" id="tickBand" aria-hidden="true">
+    <div class="marquee-track" id="tickTrack">
+      <span>SPX <span class="up">+0.34%</span></span><span>NDX <span class="up">+0.51%</span></span>
+      <span>BTC-USD <span class="dn">-1.12%</span></span><span>XAU <span class="up">+0.18%</span></span>
+      <span>WTI <span class="dn">-0.47%</span></span><span>EURUSD <span class="up">+0.06%</span></span>
+      <span>US10Y <span class="dn">-0.02</span></span>
     </div>
-    <div data-featured data-reveal>
-      <div class="empty-state">Loading the latest published signal&hellip;</div>
+  </div>
+
+  <!-- ================= STATS : HUD strip ================= -->
+  <section class="section" aria-label="Key numbers" id="statsSection">
+    <p class="kicker-line"><span class="idx">[ 00 ]</span> The numbers</p>
+    <div class="stats">
+      <div class="stat hud"><div class="num">7</div><div class="label">asset classes tracked, one config file each</div></div>
+      <div class="stat hud"><div class="num">2</div><div class="label">deployment profiles, one detection core</div></div>
+      <div class="stat hud"><div class="num">30s</div><div class="label">fetch-to-detect cycle, warm-started on restart</div></div>
+      <div class="stat hud"><div class="num">0</div><div class="label">servers required for the live public instance</div></div>
     </div>
   </section>
 
-  <!-- Method -->
-  <section class="section container" id="method">
-    <div class="section-header" data-reveal>
-      <div>
-        <span class="section-header__eyebrow">03 &mdash; Method</span>
-        <h2 class="section-header__title">How a signal is produced</h2>
-      </div>
-      <a class="section-header__action" href="https://github.com/Likhith776/Cross-Asset-Anomaly-Monitor/blob/main/docs/DATA_CONTRACT.md" rel="noopener">Data contract &rarr;</a>
+  <!-- ================= DETECTION : HUD panels ================= -->
+  <section id="how" class="section">
+    <div class="section-head" data-h2>
+      <p class="kicker-line"><span class="idx">[ 01 ]</span> Detection</p>
+      <h2>Two paths write to the same anomaly table.</h2>
     </div>
-    <div class="record-grid">
-      <article class="record-card" data-reveal>
-        <div class="record-card__image-wrap">
-          <div class="record-card__image">
-            <span class="record-card__image-surface">
-              <svg viewBox="0 0 100 100" aria-hidden="true" focusable="false">
-                <rect width="100" height="100" fill="#000"></rect>
-                <g fill="none" stroke="#fff" stroke-width="1.4">
-                  <path d="M12 78 L12 22 M12 78 L88 78"></path>
-                  <path d="M14 70 L26 58 L38 64 L50 40 L62 47 L74 26 L86 18"></path>
-                  <circle cx="50" cy="40" r="3.2"></circle>
-                  <circle cx="86" cy="18" r="3.2"></circle>
-                </g>
-              </svg>
-            </span>
-          </div>
+    <p class="section-lede" data-rise>Every price tick is scored the instant it arrives, and every five minutes a second pass re-checks the last hundred readings per symbol for anything the first pass would only catch in hindsight.</p>
+
+    <div class="paths" data-rise-group>
+      <div class="path hud">
+        <div class="ph"><span class="name">Path A</span><span class="mode">Real-time · per tick</span></div>
+        <div class="body">
+          <h3>Tick-level detectors</h3>
+          <p>Runs the moment a quote lands, before it's written anywhere else.</p>
+          <ul>
+            <li><span class="n">01</span> Z-score spike against the rolling window</li>
+            <li><span class="n">02</span> Isolation forest on multivariate feature vectors</li>
+            <li><span class="n">03</span> Cross-asset correlation break vs. tracked pairs</li>
+          </ul>
         </div>
-        <div class="record-card__text">
-          <span class="record-card__index">Step 01 &middot; Ingest</span>
-          <h3 class="record-card__title">Keyless quotes</h3>
-          <p class="record-card__excerpt">A composite feed pulls every instrument on a 30-minute cadence, primary keyless sources first, with retries and a carried-state fallback.</p>
+      </div>
+      <div class="path hud">
+        <div class="ph"><span class="name">Path B</span><span class="mode">Batch · every 5 minutes</span></div>
+        <div class="body">
+          <h3>Composite scoring</h3>
+          <p>Re-scores the last 100 feature rows per symbol with a weighted blend, and writes a generated description with each hit.</p>
+          <ul>
+            <li><span class="n">01</span> Z-score, recomputed over a longer horizon</li>
+            <li><span class="n">02</span> EWMA volatility surge</li>
+            <li><span class="n">03</span> PCA residual across the tracked universe</li>
+          </ul>
         </div>
-      </article>
-      <article class="record-card" data-reveal data-reveal-delay="80">
-        <div class="record-card__image-wrap">
-          <div class="record-card__image">
-            <span class="record-card__image-surface">
-              <svg viewBox="0 0 100 100" aria-hidden="true" focusable="false">
-                <rect width="100" height="100" fill="#000"></rect>
-                <g fill="none" stroke="#fff" stroke-width="1.4">
-                  <circle cx="50" cy="50" r="26"></circle>
-                  <path d="M50 24 V76 M24 50 H76 M32 32 L68 68 M68 32 L32 68"></path>
-                </g>
-              </svg>
-            </span>
-          </div>
-        </div>
-        <div class="record-card__text">
-          <span class="record-card__index">Step 02 &middot; Features</span>
-          <h3 class="record-card__title">Rolling state</h3>
-          <p class="record-card__excerpt">Z-scores, EWMA residuals, realised volatility and pairwise correlation are rebuilt from history on every restart, so a cold start is never blind.</p>
-        </div>
-      </article>
-      <article class="record-card" data-reveal data-reveal-delay="160">
-        <div class="record-card__image-wrap">
-          <div class="record-card__image">
-            <span class="record-card__image-surface">
-              <svg viewBox="0 0 100 100" aria-hidden="true" focusable="false">
-                <rect width="100" height="100" fill="#000"></rect>
-                <g fill="none" stroke="#fff" stroke-width="1.4">
-                  <path d="M14 62 L28 44 L42 56 L56 30 L70 40 L86 22"></path>
-                  <path d="M14 74 H86" stroke-dasharray="3 3"></path>
-                  <circle cx="56" cy="30" r="3.4"></circle>
-                </g>
-              </svg>
-            </span>
-          </div>
-        </div>
-        <div class="record-card__text">
-          <span class="record-card__index">Step 03 &middot; Detect</span>
-          <h3 class="record-card__title">Four detectors</h3>
-          <p class="record-card__excerpt">Univariate z-score spikes, isolation forest outliers, correlation breaks and a multivariate Mahalanobis check vote on the same window; regimes rescale the thresholds.</p>
-        </div>
-      </article>
-      <article class="record-card" data-reveal data-reveal-delay="240">
-        <div class="record-card__image-wrap">
-          <div class="record-card__image">
-            <span class="record-card__image-surface">
-              <svg viewBox="0 0 100 100" aria-hidden="true" focusable="false">
-                <rect width="100" height="100" fill="#000"></rect>
-                <g fill="none" stroke="#fff" stroke-width="1.4">
-                  <rect x="20" y="22" width="60" height="40"></rect>
-                  <path d="M20 52 H80 M34 62 V76 M66 62 V76 M50 74 V86"></path>
-                </g>
-              </svg>
-            </span>
-          </div>
-        </div>
-        <div class="record-card__text">
-          <span class="record-card__index">Step 04 &middot; Publish</span>
-          <h3 class="record-card__title">Static, always up</h3>
-          <p class="record-card__excerpt">The run writes JSON and a static page to a published branch. GitHub Pages serves it, and every human label feeds the rolling precision metric.</p>
-        </div>
-      </article>
+      </div>
+    </div>
+    <p class="footnote" data-rise>High-severity hits (score ≥ 0.7) can carry a one- to two-sentence explanation from a single Gemini call, strictly grounded in the feature snapshot — no news speculation. It's off by default, capped at 6 calls/hour and 30/day, and any failure just leaves the field null; the anomaly itself is always written first.</p>
+  </section>
+
+  <!-- ================= ARCHITECTURE : pinned sequence (from v4), HUD boxes ================= -->
+  <section id="architecture" class="section">
+    <div class="section-head" data-h2>
+      <p class="kicker-line"><span class="idx">[ 02 ]</span> Architecture</p>
+      <h2>The same detectors, two different bodies.</h2>
+    </div>
+    <p class="section-lede" data-rise>Slim is one process for anyone who wants to just run it. Full streaming is the event-driven topology underneath it, for scaling out.</p>
+
+    <div class="tabs" role="tablist" aria-label="Architecture profiles">
+      <button class="tab" role="tab" id="tab-slim" aria-selected="true" aria-controls="view-slim" data-view="slim" data-prefix="view-"><span class="b">[&nbsp;</span>Slim profile<span class="b">&nbsp;]</span></button>
+      <button class="tab" role="tab" id="tab-full" aria-selected="false" aria-controls="view-full" data-view="full" data-prefix="view-"><span class="b">[&nbsp;</span>Full streaming<span class="b">&nbsp;]</span></button>
+    </div>
+
+    <div class="diagram">
+      <div class="arch-view" id="view-slim" role="tabpanel" aria-labelledby="tab-slim">
+        <div class="flowrow"><span class="box">Yahoo / Finnhub</span><span class="arrow">── 30s fetch loop ──▶</span><span class="box">src/slim.py (one process)</span></div>
+        <div class="flowrow" style="margin-left:26px;"><span class="arrow">├─</span><span class="box">ingest thread → features → 3-detector pipeline → alerts</span></div>
+        <div class="flowrow" style="margin-left:26px;"><span class="arrow">├─</span><span class="box">batch thread → composite scoring / 5 min</span></div>
+        <div class="flowrow" style="margin-left:26px;"><span class="arrow">├─</span><span class="box">daily threads → retention cleanup, backup</span></div>
+        <div class="flowrow" style="margin-left:26px;"><span class="arrow">└─</span><span class="box">FastAPI :8000</span></div>
+        <div class="flowrow" style="margin-left:52px;margin-top:6px;"><span class="arrow">▼</span></div>
+        <div class="flowrow" style="margin-left:26px;"><span class="box">PostgreSQL — market_anomalies</span><span class="box">Streamlit dashboard :8501</span></div>
+        <p class="footnote">Working set ≈ 0.9 GB including OS. Runs on a laptop, a small box, or a 1 GB free-tier VM. No Docker, no broker.</p>
+      </div>
+      <div class="arch-view" id="view-full" role="tabpanel" aria-labelledby="tab-full" hidden>
+        <div class="flowrow"><span class="box">Yahoo / Finnhub (producer)</span><span class="arrow">──▶</span><span class="box">Kafka — topic: market-data</span></div>
+        <div class="flowrow"><span class="arrow">├──▶</span><span class="box">feature-consumer — z-score, EWMA, PCA, correlation snapshots</span></div>
+        <div class="flowrow"><span class="arrow">└──▶</span><span class="box">anomaly-consumer — tick-level pipeline</span></div>
+        <div class="flowrow" style="margin-top:6px;"><span class="arrow">▼</span></div>
+        <div class="flowrow"><span class="box">PostgreSQL — market_features · anomaly_events · correlation_snapshots</span></div>
+        <div class="flowrow" style="margin-top:6px;"><span class="arrow">▼</span></div>
+        <div class="flowrow"><span class="box">scheduler — batch detection / 5 min, cleanup / daily</span><span class="box">FastAPI :8000</span><span class="box">Streamlit :8501</span></div>
+        <p class="footnote">8 containers, KRaft-mode Kafka (no Zookeeper). Same detector modules as slim — never a fork, just more infrastructure around them.</p>
+      </div>
     </div>
   </section>
 
-  <!-- Incidents -->
-  <section class="section container" id="incidents">
-    <div class="section-header" data-reveal>
-      <div>
-        <span class="section-header__eyebrow">04 &mdash; Record</span>
-        <h2 class="section-header__title">Recent incidents</h2>
-      </div>
-      <a class="section-header__action" href="dashboard.html#incidents">Incident log &rarr;</a>
+  <!-- ================= DEPLOYMENT ================= -->
+  <section id="deploy" class="section section-deploy">
+    <div class="section-head" data-h2>
+      <p class="kicker-line"><span class="idx">[ 03 ]</span> Deployment</p>
+      <h2>The public instance runs on nothing you have to keep on.</h2>
     </div>
-    <div class="record-grid" data-incidents data-reveal>
-      <div class="empty-state">Loading the incident log&hellip;</div>
+    <p class="section-lede" data-rise>The hosted version is a scheduled GitHub Actions workflow that runs the detection pipeline on GitHub's own runners and publishes straight to GitHub Pages.</p>
+    <div class="grid3" data-rise-group>
+      <div class="card hud">
+        <div class="ph"><span class="dot"></span>DEPLOY · GITHUB</div>
+        <div class="body">
+          <h4>Zero infrastructure</h4>
+          <p>No server, no database to maintain, no card on file, no dependence on any personal machine staying awake.</p>
+          <div class="metric">github.io / live-data branch</div>
+        </div>
+      </div>
+      <div class="card hud">
+        <div class="ph"><span class="dot"></span>STATE · WARM</div>
+        <div class="body">
+          <h4>Warm-started state</h4>
+          <p>Detection state persists in the published tree between runs, so each run continues from the last one instead of ramping from cold.</p>
+          <div class="metric">state/ committed each cycle</div>
+        </div>
+      </div>
+      <div class="card hud">
+        <div class="ph"><span class="dot"></span>INCIDENTS · LOG</div>
+        <div class="body">
+          <h4>Shareable incident log</h4>
+          <p>Every real anomaly the deployed system has actually caught, with severity, regime, and lead-lag context, regenerated on a fixed schedule.</p>
+          <div class="metric">refreshed every 30 min</div>
+        </div>
+      </div>
+    </div>
+    <p class="footnote" data-rise>Prefer to self-host? The slim profile needs only Python, Postgres, and about a gigabyte of RAM — front it with a free Cloudflare Tunnel and it's public with no port forwarding. The Docker profile ships Prometheus and Grafana alongside it, with a provisioned "Cross-Asset Pipeline Health" dashboard covering fetch latency, consumer lag, per-detector execution time, and DB write failures.</p>
+  </section>
+
+  <!-- ================= QUICKSTART ================= -->
+  <section id="quickstart" class="section">
+    <div class="section-head" data-h2>
+      <p class="kicker-line"><span class="idx">[ 04 ]</span> Run it yourself</p>
+      <h2>Two profiles, four commands to a running dashboard.</h2>
+    </div>
+    <div class="code-tabs" role="tablist" aria-label="Quickstart profiles">
+      <button class="tab qtab" role="tab" id="qtab-slim" aria-selected="true" aria-controls="q-slim" data-view="q-slim" data-prefix=""><span class="b">[&nbsp;</span>Slim — no Docker<span class="b">&nbsp;]</span></button>
+      <button class="tab qtab" role="tab" id="qtab-full" aria-selected="false" aria-controls="q-full" data-view="q-full" data-prefix=""><span class="b">[&nbsp;</span>Full streaming — Docker<span class="b">&nbsp;]</span></button>
+    </div>
+    <div class="quickstart-view" id="q-slim" role="tabpanel" aria-labelledby="qtab-slim">
+<div class="code-block"><span class="c"># 1. configure — DATABASE_URL is the only required value</span>
+cp .env.example .env
+
+<span class="c"># 2. first run only: create tables and seed demo data</span>
+python scripts/init_db.py
+
+<span class="c"># 3. fetch + detect + API, one process</span>
+python -m src.slim
+
+<span class="c"># 4. dashboard, second terminal</span>
+streamlit run dashboard/app.py
+<span class="g">→ localhost:8501 · localhost:8000/docs</span></div>
+    </div>
+    <div class="quickstart-view" id="q-full" role="tabpanel" aria-labelledby="qtab-full" hidden>
+<div class="code-block"><span class="c"># 1. configure (optional: add a Finnhub key for real-time crypto/FX)</span>
+cp .env.example .env
+
+<span class="c"># 2. start everything</span>
+docker compose up -d --build
+
+<span class="c"># 3. first run only: tables + 7 days of demo data</span>
+DATABASE_URL=postgresql://postgres:password@localhost:5432/market_anomalies \
+  python scripts/init_db.py
+<span class="g">→ same dashboard/API URLs as the slim profile</span></div>
     </div>
   </section>
 
 </main>
 
-<footer class="footer container">
-  <div class="footer__inner">
-    <div class="footer__left">
-      <svg class="footer__brandmark" viewBox="0 0 24 24" width="24" height="24" aria-hidden="true" focusable="false">
-        <rect class="brandmark__box" x="0" y="0" width="24" height="24"></rect>
-        <path d="M15.6 8.2a4.6 4.6 0 1 0 0 7.6M7 4.6h10M7 19.4h10" fill="none" stroke="#000" stroke-width="2.1" stroke-linecap="square"></path>
-      </svg>
-      <p class="footer__copy">&copy;<span data-year>2026</span> Cross-Asset Anomaly Monitor. Fetched, detected and published by scheduled CI.</p>
+<!-- ================= FOOTER : stack marquee + links ================= -->
+<footer>
+  <div class="foot-inner">
+    <p class="kicker-line"><span class="idx">[ 05 ]</span> Built with</p>
+  </div>
+  <div class="marquee-band" id="stackBand" aria-label="Technology stack">
+    <div class="marquee-track" id="stackTrack">
+      <span class="stack-tag">Python 3.11</span><span class="stack-tag">PostgreSQL</span><span class="stack-tag">Kafka (KRaft)</span><span class="stack-tag">FastAPI</span><span class="stack-tag">Streamlit</span><span class="stack-tag">Airflow</span><span class="stack-tag">Docker Compose</span><span class="stack-tag">Prometheus</span><span class="stack-tag">Grafana</span><span class="stack-tag">GitHub Actions</span><span class="stack-tag">Gemini 2.5 Flash</span>
     </div>
-    <div class="footer__right">
-      <a class="footer__link" href="dashboard.html">Dashboard</a>
-      <a class="footer__link" href="dashboard.html#incidents">Incidents</a>
-      <a class="footer__link" href="https://github.com/Likhith776/Cross-Asset-Anomaly-Monitor/blob/main/README.md" rel="noopener">Readme</a>
-      <a class="footer__link" href="#main" data-cookie-open>Cookies</a>
-      <div class="footer__socials">
-        <a class="footer__social" href="https://github.com/Likhith776/Cross-Asset-Anomaly-Monitor" rel="noopener" aria-label="GitHub repository">
-          <svg class="footer__icon" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true" focusable="false"><path d="M12 .5A11.5 11.5 0 0 0 .5 12a11.5 11.5 0 0 0 7.86 10.92c.58.1.79-.25.79-.55v-1.94c-3.2.7-3.88-1.54-3.88-1.54-.53-1.34-1.29-1.7-1.29-1.7-1.05-.72.08-.71.08-.71 1.16.08 1.77 1.19 1.77 1.19 1.03 1.77 2.7 1.26 3.36.96.1-.75.4-1.26.73-1.55-2.55-.29-5.24-1.28-5.24-5.7 0-1.26.45-2.29 1.19-3.1-.12-.29-.52-1.46.11-3.05 0 0 .96-.3 3.15 1.18a10.9 10.9 0 0 1 5.74 0c2.18-1.48 3.14-1.18 3.14-1.18.63 1.59.23 2.76.12 3.05.74.81 1.18 1.84 1.18 3.1 0 4.43-2.69 5.4-5.25 5.69.41.36.78 1.06.78 2.14v3.17c0 .3.2.66.8.55A11.5 11.5 0 0 0 23.5 12 11.5 11.5 0 0 0 12 .5Z"></path></svg>
-        </a>
-      </div>
+  </div>
+  <div class="foot-inner">
+    <div class="foot-links" data-rise-group>
+      <a href="https://github.com/Likhith776/Cross-Asset-Anomaly-Monitor" target="_blank" rel="noopener">Source — github.com/Likhith776/Cross-Asset-Anomaly-Monitor</a>
+      <a href="dashboard.html" target="_blank" rel="noopener">Live dashboard</a>
+      <a href="https://github.com/Likhith776/Cross-Asset-Anomaly-Monitor/blob/main/docs/DATA_CONTRACT.md" target="_blank" rel="noopener">Data contract</a>
     </div>
+  </div>
+  <div class="foot-bottom">
+    <span>Real anomalies. Real markets. No demo mode on the public instance.</span>
+    <span>MIT-style personal project by Likhith776</span>
   </div>
 </footer>
 
-<div class="cookie-notice" role="region" aria-label="Cookie notice">
-  <p>This site uses no tracking cookies. Browser storage is used only to remember this notice and your theme preference.</p>
-  <div class="cookie-notice__row">
-    <button class="cookie-notice__accept" type="button" data-cookie-accept>That&rsquo;s OK</button>
-    <a class="cookie-notice__decline" href="https://github.com/Likhith776/Cross-Asset-Anomaly-Monitor/blob/main/README.md" rel="noopener">Read more</a>
-  </div>
-</div>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/gsap.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/gsap@3.12.5/dist/ScrollTrigger.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/lenis@1.3.4/dist/lenis.min.js"></script>
+<script>
+(function(){
+  'use strict';
+  var reduceMotion = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+  var hasGsap = typeof window.gsap !== 'undefined';
+  var hasST = hasGsap && typeof window.ScrollTrigger !== 'undefined';
+  var finePointer = window.matchMedia('(hover: hover) and (pointer: fine)').matches;
 
-<script src="assets/js/lenis-lite.js" defer></script>
-<script src="assets/js/reveal.js" defer></script>
-<script src="assets/js/cursor.js" defer></script>
-<script src="assets/js/nav.js" defer></script>
-<script src="assets/js/carousel.js" defer></script>
-<script src="assets/js/dither-hero.js" defer></script>
-<script src="assets/js/landing.js" defer></script>
-<script src="assets/js/cookie.js" defer></script>
+  /* ---------- marquees : duplicate content for the seamless -50% loop ----------
+     Both bands bake one copy in HTML (no-JS frame stays complete); JS
+     clones it once so translateX(-50%) lands on the seam. */
+  ['tickTrack','stackTrack'].forEach(function(id){
+    var el = document.getElementById(id);
+    if(el) el.innerHTML += el.innerHTML;
+  });
+
+  /* ---------- mobile menu ---------- */
+  var menu = document.getElementById('mobileMenu');
+  var menuBtn = document.getElementById('menuBtn');
+  var menuClose = document.getElementById('menuClose');
+  function openMenu(){
+    menu.hidden = false;
+    requestAnimationFrame(function(){ menu.classList.add('open'); });
+    menuBtn.setAttribute('aria-expanded','true');
+    var first = menu.querySelector('a'); if(first) first.focus();
+  }
+  function closeMenu(){
+    if(menu.hidden) return;
+    menu.classList.remove('open');
+    menuBtn.setAttribute('aria-expanded','false');
+    setTimeout(function(){ menu.hidden = true; }, reduceMotion ? 0 : 350);
+    menuBtn.focus();
+  }
+  menuBtn.addEventListener('click', openMenu);
+  menuClose.addEventListener('click', closeMenu);
+  document.addEventListener('keydown', function(e){ if(e.key==='Escape') closeMenu(); });
+
+  /* ---------- smooth anchors (Lenis when available) ---------- */
+  var lenis = null;
+  function scrollToTarget(target){
+    if(lenis){ lenis.scrollTo(target, {duration:1.1}); }
+    else { target.scrollIntoView({behavior: reduceMotion ? 'auto' : 'smooth'}); }
+  }
+  document.querySelectorAll('a[href^="#"]').forEach(function(a){
+    a.addEventListener('click', function(e){
+      var id = a.getAttribute('href');
+      if(id.length < 2) return;
+      var target = document.querySelector(id);
+      if(!target) return;
+      e.preventDefault();
+      closeMenu();
+      scrollToTarget(target);
+    });
+  });
+
+  /* ================================================================
+     THE SIGNAL FIELD — full-bleed 7-line canvas (concept3's engine,
+     budgeted for the heavier role):
+       · 7 lines × 140 points, ONE paint pass, no per-frame gradients
+       · DPR capped at 1.5, width capped at 1600 device px
+       · IntersectionObserver pauses the loop the moment the hero
+         leaves the viewport
+       · reduced-motion: one static frame, no loop, no heartbeat
+       · touch/coarse pointer: one static frame + slow flag cycle
+         (5s) instead of the full RAF loop — verified cheap before
+         enabling anything continuous on mobile
+     ================================================================ */
+  var canvas = document.getElementById('field');
+  var ctx = canvas ? canvas.getContext('2d', { alpha: true }) : null;
+  var names = ['SPX','NDX','BTC','XAU','WTI','EURUSD','US10Y'];
+  var hudNames = ['SPX','BTC','XAU','US10Y']; /* the four corner panels */
+  var W = 0, H = 0, DPR = 1, lines = [], running = false, rafId = null;
+
+  function makeLine(i){
+    var pts = [], y0 = 0.1 + 0.8 * (i / 6); /* normalized; scaled on resize */
+    for(var k = 0; k < 140; k++) pts.push(y0);
+    return { pts: pts, y0: y0, name: names[i], flagUntil: 0 };
+  }
+  for(var li = 0; li < 7; li++) lines.push(makeLine(li));
+
+  function resize(){
+    if(!canvas) return;
+    DPR = Math.min(window.devicePixelRatio || 1, 1.5);
+    W = Math.min(window.innerWidth, 1600);
+    H = canvas.parentElement.getBoundingClientRect().height;
+    canvas.width = Math.round(W * DPR);
+    canvas.height = Math.round(H * DPR);
+    ctx.setTransform(DPR, 0, 0, DPR, 0, 0);
+  }
+  function paint(now){
+    ctx.clearRect(0, 0, W, H);
+    for(var i = 0; i < lines.length; i++){
+      var ln = lines[i];
+      var last = ln.pts[ln.pts.length - 1];
+      var ny = last + (Math.random() - 0.5) * 0.011; /* normalized units */
+      ny += (ln.y0 - ny) * 0.03;
+      ny = Math.max(0.02, Math.min(0.98, ny));
+      ln.pts.push(ny); ln.pts.shift();
+      var flagged = now < ln.flagUntil;
+      ctx.beginPath();
+      for(var k = 0; k < ln.pts.length; k++){
+        var x = (k / (ln.pts.length - 1)) * W;
+        var y = ln.pts[k] * H;
+        if(k === 0) ctx.moveTo(x, y); else ctx.lineTo(x, y);
+      }
+      ctx.strokeStyle = flagged ? '#c7f24e' : 'rgba(200,205,200,0.35)';
+      ctx.lineWidth = flagged ? 2 : 1.2;
+      ctx.globalAlpha = flagged ? 1 : 0.7;
+      ctx.stroke();
+      ctx.globalAlpha = 1;
+      if(flagged){
+        var px = W * 0.82, py = ln.pts[Math.floor(ln.pts.length * 0.82)] * H;
+        var life = 1 - (ln.flagUntil - now) / 900;
+        ctx.beginPath();
+        ctx.arc(px, py, 4 + life * 22, 0, Math.PI * 2);
+        ctx.strokeStyle = 'rgba(199,242,78,' + (0.5 * (1 - life)) + ')';
+        ctx.stroke();
+      }
+    }
+  }
+  function frame(now){
+    if(!running) return;
+    paint(now);
+    rafId = requestAnimationFrame(frame);
+  }
+  function start(){ if(running) return; running = true; rafId = requestAnimationFrame(frame); }
+  function stop(){ running = false; if(rafId) cancelAnimationFrame(rafId); }
+
+  if(ctx){
+    resize();
+    window.addEventListener('resize', function(){ resize(); if(!running) paint(performance.now()); }, { passive: true });
+    paint(performance.now()); /* first frame always — static base for every path */
+
+    if(!reduceMotion){
+      if(finePointer){
+        if('IntersectionObserver' in window){
+          new IntersectionObserver(function(entries){
+            entries[0].isIntersecting ? start() : stop();
+          }, { threshold: 0 }).observe(canvas.parentElement);
+        } else { start(); }
+      } else {
+        /* touch: no RAF loop. A slow flag cycle repaints occasionally so the
+           heartbeat still lives on mobile — one paint every ~1.2s, ~30x
+           cheaper than 60fps, and only while the hero is on screen. */
+        (function touchLoop(){
+          if(canvas.getBoundingClientRect().bottom < 0) return setTimeout(touchLoop, 2000);
+          paint(performance.now());
+          setTimeout(touchLoop, 1200);
+        })();
+      }
+    }
+  }
+
+  /* ================================================================
+     THE HEARTBEAT — one shared anomaly event, page-wide (concept3's
+     triggerAnomaly, extended). Every 3.5–6s an anomaly fires on one
+     of the 7 instruments. In one beat:
+       · its canvas line flags lime + pings (hero in view)
+       · its corner HUD flips to "anomaly" if it has one
+       · the hero headline RGB-glitches (hero in view)
+       · the ticker band flashes a coral frame pulse (always visible
+         in the first screen; harmless below)
+       · the HUD panel heading the section currently in view flashes
+         its border + dot — the "nearest panel" extension. Only ONE
+         panel per beat, chosen from the visible section's panels,
+         so it reads as a heartbeat, not simultaneous noise.
+     Reduced-motion: the heartbeat never starts. No-JS: never exists.
+     ================================================================ */
+  var heartbeat = (function(){
+    var headline = document.getElementById('headline');
+    var tickBand = document.getElementById('tickBand');
+    var sections = [
+      { sel: '#statsSection', panels: function(){ return document.querySelectorAll('#statsSection .stat'); } },
+      { sel: '#how',           panels: function(){ return document.querySelectorAll('#how .path'); } },
+      { sel: '#architecture',  panels: function(){ return document.querySelectorAll('#view-slim .box, #view-full .box'); } },
+      { sel: '#deploy',        panels: function(){ return document.querySelectorAll('#deploy .card'); } },
+      { sel: '#quickstart',    panels: function(){ return document.querySelectorAll('#quickstart .code-block'); } }
+    ];
+    function visibleSection(){
+      var mid = window.scrollY + window.innerHeight * 0.5;
+      for(var i = 0; i < sections.length; i++){
+        var el = document.querySelector(sections[i].sel);
+        if(!el) continue;
+        var top = el.offsetTop, bottom = top + el.offsetHeight;
+        /* inside the pinned architecture range the section is pinned on
+           screen even though its offset range is small — treat midpoint
+           generously by adding the pin height when pin-mode is on */
+        if(el.id === 'architecture' && document.querySelector('.pin-mode')) bottom += window.innerHeight * 1.8;
+        if(mid >= top && mid < bottom) return sections[i];
+      }
+      return null;
+    }
+    function flashPanel(panel){
+      if(!panel) return;
+      panel.classList.add('flag');
+      /* keep text legible: only chrome flashes, never copy */
+      setTimeout(function(){ panel.classList.remove('flag'); }, 900);
+    }
+    function trigger(){
+      var idx = Math.floor(Math.random() * names.length);
+      var name = names[idx];
+      lines[idx].flagUntil = performance.now() + 900;
+
+      var heroOnScreen = canvas && canvas.getBoundingClientRect().bottom > 0;
+      if(heroOnScreen && headline){
+        headline.classList.add('glitching');
+        setTimeout(function(){ headline.classList.remove('glitching'); }, 350);
+      }
+      var hudPanel = hudNames.indexOf(name) !== -1 ? document.getElementById('hud-' + name) : null;
+      if(hudPanel){
+        var tag = hudPanel.querySelector('.tag');
+        hudPanel.classList.add('flag');
+        tag.textContent = 'anomaly';
+        setTimeout(function(){ hudPanel.classList.remove('flag'); tag.textContent = 'watching'; }, 1400);
+      }
+      if(tickBand){
+        tickBand.style.borderColor = '#ff5b4d';
+        tickBand.style.boxShadow = '0 0 26px rgba(255,91,77,.25)';
+        setTimeout(function(){ tickBand.style.borderColor = ''; tickBand.style.boxShadow = ''; }, 700);
+      }
+      var sec = visibleSection();
+      if(sec){
+        var panels = sec.panels();
+        if(panels.length){
+          /* if the flagged instrument matches a panel that mentions it,
+             flash THAT one; otherwise a random panel of the section */
+          var matched = null;
+          if(sec.sel === '#architecture'){
+            for(var p = 0; p < panels.length; p++){
+              if(panels[p].offsetParent && !panels[p].closest('[hidden]') &&
+                 panels[p].textContent.toLowerCase().indexOf(name.toLowerCase().split('-')[0]) !== -1){
+                matched = panels[p]; break;
+              }
+            }
+          }
+          flashPanel(matched || panels[Math.floor(Math.random() * panels.length)]);
+        }
+      }
+    }
+    function schedule(){
+      setTimeout(function(){ trigger(); schedule(); }, 3500 + Math.random() * 2500);
+    }
+    return { trigger: trigger, schedule: schedule };
+  })();
+
+  if(!reduceMotion){
+    setTimeout(heartbeat.trigger, 1400);
+    heartbeat.schedule();
+  }
+
+  /* ---------- tabs (architecture + quickstart) — bound BEFORE the
+     motion gate so click-to-switch works with GSAP missing too.
+     The pin override only engages when the pin initialized. ---------- */
+  var archPinActive = false;
+  var archPinST = null;
+  function staggerPanelIn(panel){
+    if(!hasGsap || reduceMotion) return;
+    var rows = panel.querySelectorAll('.flowrow');
+    if(rows.length){
+      window.gsap.fromTo(rows, { y: 20, opacity: 0 },
+        { y: 0, opacity: 1, duration: .6, ease: 'power3.out', stagger: .06 });
+    }
+  }
+  function swapPanels(tabs, t, prefix){
+    var target = document.getElementById(prefix + t.getAttribute('data-view'));
+    var current = null;
+    tabs.forEach(function(x){
+      var panel = document.getElementById(prefix + x.getAttribute('data-view'));
+      if(panel && !panel.hidden) current = panel;
+    });
+    if(current === target){ staggerPanelIn(target); return; }
+    var doShow = function(){
+      tabs.forEach(function(x){
+        var panel = document.getElementById(prefix + x.getAttribute('data-view'));
+        if(panel) panel.hidden = panel !== target;
+      });
+      if(target) staggerPanelIn(target);
+    };
+    if(current && hasGsap && !reduceMotion){
+      var rows = current.querySelectorAll('.flowrow');
+      if(rows.length){
+        window.gsap.to(rows, { y: -10, opacity: 0, duration: .16, ease: 'power2.in', stagger: .015,
+          onComplete: function(){
+            window.gsap.set(rows, { clearProps: 'transform,opacity' });
+            doShow();
+          } });
+        return;
+      }
+    }
+    doShow();
+  }
+  function bindTabs(groupSel){
+    var tabs = document.querySelectorAll(groupSel);
+    tabs.forEach(function(t){
+      t.addEventListener('click', function(){
+        tabs.forEach(function(x){
+          x.classList.remove('active');
+          x.setAttribute('aria-selected','false');
+        });
+        t.classList.add('active');
+        t.setAttribute('aria-selected','true');
+        if(archPinActive && archPinST && t.getAttribute('data-prefix')){
+          archPinST.jump(t.getAttribute('data-view'));
+          return;
+        }
+        swapPanels(tabs, t, t.getAttribute('data-prefix') || '');
+      });
+    });
+  }
+  bindTabs('.tab:not(.qtab)');
+  bindTabs('.qtab');
+  document.querySelector('.tab:not(.qtab)').classList.add('active');
+  document.querySelector('.qtab').classList.add('active');
+  function syncArchTabs(view){
+    document.querySelectorAll('.tab:not(.qtab)').forEach(function(x){
+      var isOn = x.getAttribute('data-view') === view;
+      x.classList.toggle('active', isOn);
+      x.setAttribute('aria-selected', isOn ? 'true' : 'false');
+    });
+  }
+
+  /* ---------- motion block: GSAP reveals + pinned architecture (from v4) ---------- */
+  if(reduceMotion || !hasGsap) return;
+  if(hasST) window.gsap.registerPlugin(window.ScrollTrigger);
+
+  if(typeof window.Lenis !== 'undefined'){
+    lenis = new window.Lenis({ duration: 1.1 });
+    document.documentElement.classList.add('lenis');
+    if(hasST){
+      lenis.on('scroll', window.ScrollTrigger.update);
+      window.gsap.ticker.add(function(time){ lenis.raf(time * 1000); });
+      window.gsap.ticker.lagSmoothing(0);
+    } else {
+      (function raf(t){ lenis.raf(t); requestAnimationFrame(raf); })(0);
+    }
+  }
+
+  /* nav intro (carried from v2's grammar, restyled timing only) */
+  window.gsap.from('[data-intro]', { yPercent: 50, rotate: -2, opacity: 0, filter: 'blur(6px)', duration: .6, ease: 'power3.out', stagger: .06, delay: .2 });
+  window.gsap.from('.kicker', { y: 14, opacity: 0, duration: .5, ease: 'power3.out', delay: .3 });
+
+  /* section h2s : RGB-split glitch ON ENTER (the emphasis move) —
+     one 350ms glitch burst when the headline crosses into view,
+     replacing v3–v5's char/word rise. Split into spans so
+     data-text layers align per line. */
+  document.querySelectorAll('h2').forEach(function(h){
+    var words = h.textContent.trim().split(/\s+/);
+    h.textContent = '';
+    var line = document.createElement('span');
+    words.forEach(function(w, i){
+      var s = document.createElement('span');
+      s.textContent = w;
+      line.appendChild(s);
+      if(i < words.length - 1) line.appendChild(document.createTextNode(' '));
+    });
+    line.setAttribute('data-text', line.textContent);
+    h.appendChild(line);
+    if(hasST){
+      window.gsap.from(h, { opacity: 0, y: 24, duration: .7, ease: 'power3.out',
+        scrollTrigger: { trigger: h, start: 'top 85%', once: true,
+          onEnter: function(){
+            if(reduceMotion) return;
+            var head = h.closest('.section-head') || h;
+            head.classList.add('glitching');
+            setTimeout(function(){ head.classList.remove('glitching'); }, 350);
+          }
+        } });
+    }
+  });
+
+  /* rise+settle for body copy and panels (no blur-heavy filter on
+     the HUD panels — backdrop-filter already costs; keep it cheap) */
+  if(hasST){
+    document.querySelectorAll('[data-rise]').forEach(function(el){
+      window.gsap.from(el, { y: 30, opacity: 0, duration: .8, ease: 'power3.out',
+        scrollTrigger: { trigger: el, start: 'top 88%' } });
+    });
+    document.querySelectorAll('[data-rise-group]').forEach(function(group){
+      window.gsap.from(group.children, { y: 44, opacity: 0, duration: .9, ease: 'power3.out', stagger: .1,
+        scrollTrigger: { trigger: group, start: 'top 85%' },
+        clearProps: 'transform,opacity' });
+    });
+    document.querySelectorAll('.stat').forEach(function(stat){
+      window.gsap.from(stat, { y: 34, opacity: 0, duration: .8, ease: 'power3.out', stagger: .08,
+        scrollTrigger: { trigger: '.stats', start: 'top 90%' } });
+    });
+    document.querySelectorAll('.quickstart-view').forEach(function(view){
+      var block = view.querySelector('.code-block');
+      if(!block) return;
+      var html = block.innerHTML;
+      block.innerHTML = html.split('\n').map(function(l){
+        return l.length ? '<span class="code-line">' + l + '</span>' : '<span class="code-line">&nbsp;</span>';
+      }).join('\n');
+      window.gsap.from(block.querySelectorAll('.code-line'), {
+        y: 16, opacity: 0, duration: .5, ease: 'power3.out', stagger: .05,
+        scrollTrigger: { trigger: view, start: 'top 92%' }
+      });
+    });
+  }
+
+  if(!hasST) return;
+
+  /* ================================================================
+     PINNED ARCHITECTURE SEQUENCE — carried from v4 (original),
+     restyled: HUD boxes, lime connectors. Same beats:
+       0.0–0.3 slim rows assemble · 0.3–0.5 connectors draw ·
+       0.5–0.8 slim→full morph · 0.8–1.0 settle.
+     Eligibility unchanged: fine pointer + width > 820 + GSAP +
+     motion allowed. Everyone else keeps click-to-switch tabs.
+     ================================================================ */
+  var archPinEligible = finePointer && window.innerWidth > 820;
+  archPinActive = archPinEligible;
+
+  if(!archPinActive){
+    document.querySelectorAll('.arch-view').forEach(function(view){
+      window.gsap.from(view.querySelectorAll('.flowrow'), {
+        y: 20, opacity: 0, duration: .6, ease: 'power3.out', stagger: .07,
+        scrollTrigger: { trigger: view, start: 'top 90%' }
+      });
+    });
+  }
+
+  if(archPinActive){
+    (function(){
+      var archSection = document.getElementById('architecture');
+      var diagram = archSection ? archSection.querySelector('.diagram') : null;
+      var slimView = document.getElementById('view-slim');
+      var fullView = document.getElementById('view-full');
+      if(!archSection || !diagram || !slimView || !fullView){
+        archPinActive = false;
+        document.querySelectorAll('.arch-view').forEach(function(view){
+          window.gsap.from(view.querySelectorAll('.flowrow'), {
+            y: 20, opacity: 0, duration: .6, ease: 'power3.out', stagger: .07,
+            scrollTrigger: { trigger: view, start: 'top 90%' }
+          });
+        });
+        return;
+      }
+
+      archSection.classList.add('pin-mode');
+      slimView.hidden = false;
+      fullView.hidden = false;
+
+      var slimRows = slimView.querySelectorAll('.flowrow');
+      var fullRows = fullView.querySelectorAll('.flowrow');
+
+      var svg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      svg.setAttribute('class', 'connector-svg');
+      svg.setAttribute('aria-hidden', 'true');
+      diagram.appendChild(svg);
+      function buildConnectors(){
+        while(svg.firstChild) svg.removeChild(svg.firstChild);
+        [[slimView],[fullView]].forEach(function(pair){
+          var view = pair[0];
+          Array.prototype.forEach.call(view.querySelectorAll('.flowrow'), function(row){
+            var boxes = row.querySelectorAll('.box');
+            for(var j = 0; j < boxes.length - 1; j++){
+              var cur = boxes[j], next = boxes[j+1];
+              var p = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+              p.setAttribute('d', 'M ' + (cur.offsetLeft + cur.offsetWidth) + ' ' + (cur.offsetTop + cur.offsetHeight/2)
+                + ' L ' + (next.offsetLeft) + ' ' + (next.offsetTop + next.offsetHeight/2));
+              p.setAttribute('stroke-dasharray', 1);
+              p.setAttribute('stroke-dashoffset', 1);
+              svg.appendChild(p);
+            }
+          });
+        });
+        return svg.querySelectorAll('path');
+      }
+      function setProgressPath(p, drawn){
+        p.setAttribute('stroke-dashoffset', 1 - drawn);
+      }
+
+      var svgPaths = buildConnectors();
+      window.gsap.set(fullRows, { opacity: 0, x: 34 });
+      window.gsap.set(fullView.querySelector('.footnote'), { opacity: 0 });
+
+      var tl = window.gsap.timeline({
+        scrollTrigger: {
+          trigger: archSection,
+          start: 'top 12%',
+          end: '+=' + Math.round(window.innerHeight * 1.8),
+          pin: true,
+          scrub: 0.6,
+          anticipatePin: 1,
+          onRefresh: function(){
+            svgPaths = buildConnectors();
+            var prog = tl.progress();
+            var drawP = Math.min(1, Math.max(0, (prog - drawStart) / (drawEnd - drawStart)));
+            Array.prototype.forEach.call(svgPaths, function(p){ setProgressPath(p, drawP); });
+          }
+        }
+      });
+      tl.to({}, { duration: .01 }, 10);
+      var drawStart = 0.3, drawEnd = 0.5, lastTabState = '';
+
+      tl.fromTo(slimRows,
+        { y: 20, opacity: 0 },
+        { y: 0, opacity: 1, ease: 'power2.out', duration: .9, stagger: .25 }, 0);
+
+      tl.eventCallback('onUpdate', function(){
+        var prog = tl.progress();
+        var drawP = Math.min(1, Math.max(0, (prog - drawStart) / (drawEnd - drawStart)));
+        Array.prototype.forEach.call(svgPaths, function(p){ setProgressPath(p, drawP); });
+        var now = prog < 0.5 ? 'slim' : 'full';
+        if(now !== lastTabState){ lastTabState = now; syncArchTabs(now); }
+      });
+
+      tl.to(slimView, { opacity: 0, y: -26, ease: 'power2.inOut', duration: 1 }, 5)
+        .to(fullRows, { opacity: 1, x: 0, ease: 'power2.out', duration: .6, stagger: .15 }, 5.2)
+        .to(fullView.querySelector('.footnote'), { opacity: 1, duration: .4 }, 7.6);
+
+      archPinST = {
+        jump: function(view){
+          var st = tl.scrollTrigger;
+          var target = view === 'full' ? st.end : st.start;
+          if(lenis){ lenis.scrollTo(target, { duration: 1.1 }); }
+          else { window.scrollTo({ top: target, behavior: 'smooth' }); }
+        }
+      };
+    })();
+  }
+})();
+</script>
+
 </body>
 </html>

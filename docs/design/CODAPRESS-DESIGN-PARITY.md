@@ -1,5 +1,11 @@
 # Design parity report — codapress.co.uk → Cross-Asset Anomaly Monitor
 
+> **Historical note (2026-09-16).** The landing page described in this report was
+> replaced by the user's own page later the same day, restored verbatim from
+> `cross-asset-anomaly-monitor-v6.html`. Every dashboard section below remains
+> accurate. The motion layer added to the dashboard is documented separately in
+> `MOTION-SPEC.md` and `MOTION-HANDOFF.md`.
+
 Reference: **https://codapress.co.uk/**
 Method: live inspection with Playwright/Chromium on 2026-09-16 — computed styles per
 element role, the full CSS custom-property sheet, DOM geometry, canvas/cursor
