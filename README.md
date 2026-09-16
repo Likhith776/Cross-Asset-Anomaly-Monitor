@@ -31,18 +31,6 @@ Everything above is served from a single static branch. The publish job runs
 > The landing page no longer hosts the dashboard. It was split on 2026-09-16:
 > `/` is now the project front door and `/dashboard.html` is the live console.
 
-### Screenshots
-
-| Landing page (1440) | Dashboard (1440) |
-|---|---|
-| ![Landing page](docs/screenshots/landing-desktop.png) | ![Dashboard](docs/screenshots/dashboard-desktop.png) |
-
-| Landing page (390) | Dashboard (390) |
-|---|---|
-| ![Landing page mobile](docs/screenshots/landing-mobile.png) | ![Dashboard mobile](docs/screenshots/dashboard-mobile.png) |
-
----
-
 ## What it does
 
 Seven instruments, four independent detectors, one published record — from a
