@@ -13,6 +13,31 @@
    Remove this file (and motion.js) to drop the whole layer.
    ===================================================================== */
 
+html.entrance-active #dashboard-entrance{background:transparent;pointer-events:none}
+html.entrance-active .entrance__skip{pointer-events:auto}
+html.entrance-active .entrance__logo{animation:entrance-mark 480ms cubic-bezier(.76,0,.24,1) forwards}
+@keyframes entrance-mark{
+  0%,25%{opacity:1;transform:translate(-50%,-50%) scale(1)}
+  100%{opacity:0;transform:translate(-50%,-65%) scale(.82)}
+}
+html.entrance-pending:not(.entrance-revealing) .dash-section,
+html.entrance-pending:not(.entrance-revealing) .asset-card,
+html.entrance-pending:not(.entrance-revealing) .incident,
+html.entrance-pending:not(.entrance-revealing) #alerts tbody tr,
+html.entrance-pending:not(.entrance-revealing) .seq-panel{animation-play-state:paused}
+html.entrance-pending:not(.entrance-revealing) .header,
+html.entrance-pending .cookie-notice,
+html.entrance-pending .cursor__ball,
+html.entrance-pending .cursor__label-wrap{visibility:hidden}
+html.entrance-revealing .header{animation:entrance-header 650ms cubic-bezier(.16,.84,.44,1) both}
+@keyframes entrance-header{from{opacity:0;transform:translateY(-12px)}to{opacity:1;transform:none}}
+@media(prefers-reduced-motion:reduce){
+  html.entrance-pending{overflow:visible;background:#000}
+  html.entrance-pending #dashboard-entrance{display:none}
+  html.entrance-pending .header,html.entrance-pending .cookie-notice{visibility:visible}
+  html.entrance-revealing .header{animation:none}
+}
+
 :root{
   --motion-instant:120ms;
   --motion-fast:200ms;      /* reference hover delta: 0.2s              */
@@ -73,7 +98,16 @@ html[data-motion="off"] .motion-pulse-ring{display:none !important}
   to  {opacity:1;transform:none}
 }
 
+@keyframes panel-enter{
+  from{opacity:0;transform:translateY(10px)}
+  to{opacity:1;transform:none}
+}
+
 @media (prefers-reduced-motion:no-preference){
+  html:not([data-motion="off"]) .seq-panel{
+    animation:panel-enter var(--motion-slow) var(--ease-out) backwards;
+    animation-delay:var(--panel-delay,0ms);
+  }
   .dash-section{
     animation:m-rise var(--motion-slow) var(--ease-out) both;
     animation-delay:calc(80ms + var(--i,0) * var(--motion-stagger));

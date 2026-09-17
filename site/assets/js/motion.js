@@ -561,7 +561,16 @@
     });
   }
 
+  function sequencePanels() {
+    $$(".dash .panel").forEach(function (panel, i) {
+      if (skip(panel, "M1")) return;
+      panel.style.setProperty("--panel-delay", String(i * 150) + "ms");
+      panel.classList.add("seq-panel");
+    });
+  }
+
   function boot() {
+    sequencePanels();
     indexAll();
     runCountUps();
     setupPaint();
@@ -575,6 +584,15 @@
     window.__motionReady = true;
   }
 
-  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", boot);
-  else boot();
+  var booted = false;
+  function ready() {
+    if (booted) return;
+    if (root.classList.contains("entrance-pending") && !root.classList.contains("entrance-revealing")) return;
+    booted = true;
+    boot();
+  }
+  window.addEventListener("cam:entrance-reveal", ready);
+  window.addEventListener("cam:entrance-complete", ready);
+  if (document.readyState === "loading") document.addEventListener("DOMContentLoaded", ready);
+  else ready();
 })();
