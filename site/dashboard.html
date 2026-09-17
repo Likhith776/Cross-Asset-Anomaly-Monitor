@@ -6,6 +6,36 @@
 <meta name="theme-color" content="#000000">
 <title>Dashboard &mdash; Cross-Asset Anomaly Monitor</title>
 <meta name="description" content="Live cross-asset anomaly dashboard: asset status, price history, correlation structure, anomaly timeline, alerts, detector precision and the incident log.">
+<script>
+(function () {
+  var root = document.documentElement;
+  var off = new URLSearchParams(location.search).get('motion') === 'off';
+  if (off || root.getAttribute('data-motion') === 'off' || matchMedia('(prefers-reduced-motion: reduce)').matches) return;
+  var nav = performance.getEntriesByType('navigation')[0];
+  if (location.hash || (nav && nav.type === 'back_forward')) return;
+  var forced = new URLSearchParams(location.search).get('entrance') === '1';
+  try {
+    if (!forced && sessionStorage.getItem('cam_dashboard_entrance') === '1' && (!nav || nav.type !== 'reload')) return;
+  } catch (e) {}
+  root.classList.add('entrance-pending');
+  window.__entranceWatchdog = setTimeout(function () {
+    root.classList.remove('entrance-pending', 'entrance-active', 'entrance-revealing');
+    var layer = document.getElementById('dashboard-entrance');
+    if (layer) layer.remove();
+    window.dispatchEvent(new CustomEvent('cam:entrance-timeout'));
+    window.dispatchEvent(new CustomEvent('cam:entrance-complete'));
+  }, 5500);
+})();
+</script>
+<style>
+#dashboard-entrance{display:none}
+html.entrance-pending{overflow:hidden;scrollbar-gutter:stable;background:#fff}
+html.entrance-pending #dashboard-entrance{display:block;position:fixed;inset:0;z-index:200;background:#fff}
+html.entrance-pending .entrance__logo{position:absolute;left:50%;top:50%;width:clamp(32px,2.5vw,52px);height:auto;transform:translate(-50%,-50%)}
+html.entrance-pending .entrance__canvas{position:absolute;inset:0;width:100%;height:100%}
+html.entrance-pending .entrance__skip{position:absolute;right:24px;bottom:24px;background:#fff;color:#000;border:1px solid #000;padding:10px 14px;font:12px monospace;cursor:pointer;z-index:1}
+@media(max-width:769px){html.entrance-pending .entrance__logo{width:10vw}}
+</style>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;700&display=swap" rel="stylesheet">
@@ -30,6 +60,15 @@
 <script src="https://cdn.jsdelivr.net/npm/echarts@5.5.0/dist/echarts.min.js" defer></script>
 </head>
 <body>
+<div id="dashboard-entrance" role="region" aria-label="Dashboard introduction">
+  <canvas class="entrance__canvas" aria-hidden="true"></canvas>
+  <svg class="entrance__logo" viewBox="0 0 24 24" aria-hidden="true" focusable="false">
+    <rect width="24" height="24" fill="#000"></rect>
+    <path d="M15.6 8.2a4.6 4.6 0 1 0 0 7.6M7 4.6h10M7 19.4h10" fill="none" stroke="#fff" stroke-width="2.1" stroke-linecap="square"></path>
+  </svg>
+  <button class="entrance__skip" type="button">Skip intro</button>
+</div>
+<script src="assets/js/entrance.js"></script>
 <a class="skip-link" href="#main">Skip to main content</a>
 
 <header class="header">
