@@ -167,6 +167,7 @@
     }
     host.innerHTML = Object.keys(latest.symbols).map(function (sym) {
       var q = latest.symbols[sym];
+      var unit = { "^GSPC": "points", "^IXIC": "points", "BTC-USD": "USD", "GC=F": "USD/oz", "CL=F": "USD/barrel", "EURUSD=X": "USD/EUR", "^TNX": "%" }[sym];
       var r1 = q.return_1m;
       var deltaCls = r1 === null || r1 === undefined ? "pct--down" : r1 >= 0 ? "pct--up" : "pct--down";
       var deltaTxt = r1 === null || r1 === undefined ? "n/a" : (r1 >= 0 ? "+" : "") + (r1 * 100).toFixed(2) + "% 1m";
@@ -175,7 +176,7 @@
       return [
         '<button type="button" class="asset-card" data-sym="' + esc(sym) + '" data-file="' + esc(symbolFile(sym)) + '" aria-pressed="false">',
         '<span class="asset-card__label">' + esc(q.label || sym) + "</span>",
-        '<span class="asset-card__price">' + fmt(q.price, Math.abs(q.price) > 1000 ? 0 : 2) + "</span>",
+        '<span class="asset-card__price">' + fmt(q.price, Math.abs(q.price) > 1000 ? 0 : 2) + (unit && q.price !== null && q.price !== undefined && !isNaN(q.price) ? " " + unit : "") + "</span>",
         '<span class="asset-card__meta">',
         '<span class="dot dot--' + ageCls(q.age_seconds || 0) + '"></span>' + esc(ageLbl(q.age_seconds)),
         '<span class="' + deltaCls + '">' + deltaTxt + "</span>",
