@@ -15,7 +15,7 @@
 
 html.entrance-active #dashboard-entrance{background:transparent;pointer-events:none}
 html.entrance-active .entrance__skip{pointer-events:auto}
-html.entrance-active .entrance__logo{animation:entrance-mark 480ms cubic-bezier(.76,0,.24,1) forwards}
+html.entrance-revealing .entrance__logo{animation:entrance-mark 480ms cubic-bezier(.76,0,.24,1) forwards}
 @keyframes entrance-mark{
   0%,25%{opacity:1;transform:translate(-50%,-50%) scale(1)}
   100%{opacity:0;transform:translate(-50%,-65%) scale(.82)}
