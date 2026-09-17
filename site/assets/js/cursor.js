@@ -171,6 +171,7 @@
     window.addEventListener("blur", leave);
     window.addEventListener("pagehide", leave);
     window.addEventListener("cam:entrance-complete", recheck);
+    window.addEventListener("cam:nav-geometry", recheck);
     // Filtered rows and paginated controls can replace the target without
     // a pointer event. Coalesce those hit tests into the next frame.
     new MutationObserver(function (records) {

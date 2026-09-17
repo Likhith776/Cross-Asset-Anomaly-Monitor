@@ -152,8 +152,14 @@ you scroll down and re-expands when you scroll up.
 | breakpoint | `769` | below this the capsule logic is skipped |
 | scrollTrigger | `id: "header-capsule"`, `start: 10`, `end: "max"` | |
 
-Computed collapse duration: `dt = |delta| * 1.4 * progress * 0.45`, clamped to the
-remaining scroll.
+Timeline: a single `power3.inOut` timeline with total duration `1.4s` (not a
+delta-scaled duration; the earlier reading of `dt = |delta| * 1.4 * progress * 0.45`
+was a progress formula, not a duration). Phase 1 fades the wordmark/logo wrap
+(~0.56s), phase 2 animates the header width, radius `500px`, background
+`rgba(255,255,255,.4)`, `backdrop-filter: blur(12px)`, chrome `#151515`,
+padding `spacing-s -> spacing-m` and halves the nav gap over the remaining
+~0.84s. Scroll-up reversal plays the same timeline in reverse; the trigger is
+scroll position/velocity, not any upward scroll.
 
 ## 5. Hover and pointer responses
 

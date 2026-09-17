@@ -111,7 +111,7 @@ Deliberate additive changes (not deviations from the language):
 | card row motion | scroll-linked, no autoplay marquee, no edge-fade mask, hard `overflow:hidden` crop | drag + keyboard, settles to the nearest card, no autoplay, no edge mask | matched |
 | custom cursor | two `mix-blend-mode: difference` shapes (30×34 / 10×18), z 100/101, label state turns the big shape `#48ff00` at `.9` | identical construction, label `DRAG` on the carousel; disabled on coarse pointers | identical |
 | nav hover | 1px bottom border → white | identical | identical |
-| navbar scroll behaviour | never shrinks, hides, blurs or gains a background | identical | identical |
+| navbar scroll behaviour | collapses into a blurred capsule below 10px of scroll: white 40% fill, `blur(12px)`, radius 500px, chrome `#151515`, padding `s -> m`, nav gap halved, wordmark fades; reverses on scroll-up, restored at top (see CODAPRESS-MOTION-INVENTORY 4.4) | matched (own implementation, `dashboardNav` in `site/assets/js/nav.js`) | matched |
 | page-load sequence | content reveals after the shell paints; the hero headline resolves out of the plasma | identical (1.6s resolve) | matched |
 | reduced motion | reference ships none | ours honours it: static dithered frame, no cursor, no smooth scroll, no reveals | improvement |
 

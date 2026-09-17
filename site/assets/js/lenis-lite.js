@@ -1,122 +1,65 @@
-/* Smooth scroll - a small RAF lerp, no dependency.
-   The reference site runs Lenis; this reproduces the interaction
-   (scroll position eases toward the target) without shipping a library.
-   Disabled for prefers-reduced-motion and for coarse pointers, where the
-   native scroll is better. */
+/* Smooth scroll with native touch scrolling and reduced-motion fallback. */
 (function () {
   "use strict";
   var reduce = window.matchMedia("(prefers-reduced-motion: reduce)");
-  if (reduce.matches) return;
-  if (!("scrollBehavior" in document.documentElement.style)) return;
-
+  var fine = window.matchMedia("(hover: hover) and (pointer: fine)");
   var doc = document.documentElement;
-  var target = window.scrollY || doc.scrollTop || 0;
+  var target = window.scrollY;
   var current = target;
-  var running = false;
-  var lerp = 0.12;
   var raf = null;
+  var locked = false;
 
-  function maxScroll() {
-    return Math.max(0, doc.scrollHeight - window.innerHeight);
+  function enabled() {
+    return fine.matches && !reduce.matches && doc.getAttribute("data-motion") !== "off" &&
+      new URLSearchParams(location.search).get("motion") !== "off";
   }
-
-  function clampTarget(v) {
-    return Math.min(Math.max(v, 0), maxScroll());
+  function clamp(v) { return Math.min(Math.max(v, 0), Math.max(0, doc.scrollHeight - innerHeight)); }
+  function stop() {
+    if (raf !== null) cancelAnimationFrame(raf);
+    raf = null;
+    target = current = window.scrollY;
   }
-
   function tick() {
-    current += (target - current) * lerp;
-    if (Math.abs(target - current) < 0.4) {
-      current = target;
-    }
+    if (locked || !enabled()) { stop(); return; }
+    current += (target - current) * .12;
+    if (Math.abs(target - current) < .4) current = target;
     window.scrollTo(0, current);
-    if (current !== target) {
-      raf = requestAnimationFrame(tick);
-    } else {
-      running = false;
-      raf = null;
-    }
+    raf = current !== target ? requestAnimationFrame(tick) : null;
   }
-
-  function start() {
-    if (!running) {
-      running = true;
-      raf = requestAnimationFrame(tick);
-    }
-  }
-
   function setTarget(v) {
-    target = clampTarget(v);
-    start();
+    target = clamp(v);
+    if (raf === null) raf = requestAnimationFrame(tick);
   }
-
-  function syncFromUser() {
-    target = clampTarget(window.scrollY);
-    current = target;
-  }
-
-  window.addEventListener(
-    "wheel",
-    function (e) {
-      if (e.ctrlKey) return;
-      if (e.target.closest && e.target.closest("[data-native-scroll]")) return;
-      e.preventDefault();
-      setTarget(target + e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? window.innerHeight : 1));
-    },
-    { passive: false }
-  );
-
-  var touchY = null;
-  window.addEventListener(
-    "touchstart",
-    function (e) {
-      if (e.touches.length === 1) {
-        touchY = e.touches[0].clientY;
-        syncFromUser();
-        if (raf) cancelAnimationFrame(raf);
-        running = false;
-        raf = null;
-      }
-    },
-    { passive: true }
-  );
-  window.addEventListener(
-    "touchmove",
-    function (e) {
-      if (touchY === null || e.touches.length !== 1) return;
-      var y = e.touches[0].clientY;
-      var dy = touchY - y;
-      touchY = y;
-      window.scrollTo(0, clampTarget(window.scrollY + dy * 1.6));
-    },
-    { passive: true }
-  );
-  window.addEventListener("touchend", function () { touchY = null; }, { passive: true });
-
+  window.addEventListener("wheel", function (e) {
+    if (locked || !enabled() || e.ctrlKey || e.defaultPrevented) return;
+    if (e.target.closest && e.target.closest("[data-native-scroll]")) return;
+    e.preventDefault();
+    setTarget(target + e.deltaY * (e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? innerHeight : 1));
+  }, { passive: false });
+  window.addEventListener("touchstart", stop, { passive: true });
   window.addEventListener("scroll", function () {
-    if (!running) syncFromUser();
+    if (raf === null) target = current = window.scrollY;
   }, { passive: true });
+  window.addEventListener("resize", function () { target = clamp(target); });
+  window.addEventListener("cam:nav-menu", function (e) { locked = e.detail.open; stop(); });
 
-  window.addEventListener("resize", function () { target = clampTarget(target); });
-
-  // Anchor links ease instead of jumping.
   document.addEventListener("click", function (e) {
     var a = e.target.closest && e.target.closest('a[href^="#"]');
-    if (!a) return;
-    var id = a.getAttribute("href");
-    if (!id || id === "#") return;
-    var el = document.querySelector(id);
-    if (!el) return;
+    if (!a || e.defaultPrevented || e.button !== 0 || e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+    var hash = a.getAttribute("href");
+    var el = hash.length > 1 && document.getElementById(decodeURIComponent(hash.slice(1)));
+    if (!el || locked) return;
     e.preventDefault();
-    var top = el.getBoundingClientRect().top + window.scrollY - 24;
-    setTarget(top);
-    if (history.replaceState) history.replaceState(null, "", id);
+    var margin = parseFloat(getComputedStyle(el).scrollMarginTop) || 24;
+    var header = document.querySelector("[data-nav-parity] .header");
+    if (header) margin = Math.max(margin, header.getBoundingClientRect().bottom + 24);
+    var top = el.getBoundingClientRect().top + window.scrollY - margin;
+    if (enabled()) setTarget(top);
+    else { stop(); window.scrollTo({ top: clamp(top), behavior: "instant" }); }
+    if (history.replaceState) history.replaceState(null, "", hash);
   });
-
-  reduce.addEventListener && reduce.addEventListener("change", function () {
-    if (reduce.matches && raf) { cancelAnimationFrame(raf); raf = null; running = false; }
-  });
-
-  syncFromUser();
-  doc.classList.add("lenis");
+  function syncMedia() { stop(); doc.classList.toggle("lenis", enabled()); }
+  reduce.addEventListener("change", syncMedia);
+  fine.addEventListener("change", syncMedia);
+  syncMedia();
 })();
