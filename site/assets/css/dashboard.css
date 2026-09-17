@@ -125,7 +125,7 @@ input[type="range"]{padding:0;border:0;accent-color:#ffffff;width:clamp(120px,14
 .incident__actions{margin-top:.75rem;font-size:var(--text-xs);text-transform:uppercase}
 
 /* ---- raw links ---- */
-.raw-links{display:flex;flex-direction:column;gap:.6rem;font-size:var(--text-sm)}
+.raw-links{display:flex;flex-direction:column;align-items:flex-start;gap:.6rem;font-size:var(--text-sm)}
 .raw-links a{text-decoration:underline}
 
 /* ---- publish status banner ---- */
