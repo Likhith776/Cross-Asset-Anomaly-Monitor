@@ -449,10 +449,11 @@
 
   function scRun(host, node) {
     if (!node || skip(host, "M12")) return;
-    var original = node.textContent;
-    if (!original || !/[A-Za-z0-9]/.test(original)) return;
     var prev = scRunning.get(host);
     if (prev) prev.cancel();
+    /* Cancellation restores the label before a new pass captures its text. */
+    var original = node.textContent;
+    if (!original || !/[A-Za-z0-9]/.test(original)) return;
 
     var hostLabel = (host.textContent || "").trim();
     var priorAria = host.getAttribute("aria-label");
