@@ -582,28 +582,35 @@ main{padding-bottom:var(--spacing-xl)}
    --------------------------------------------------------------- */
 .cursor__ball,.cursor__label-wrap{
   position:fixed;top:0;left:0;pointer-events:none;
-  z-index:100;mix-blend-mode:difference;
-  display:none;
+  z-index:100;view-transition-name:none;visibility:hidden;opacity:0;
 }
-html.has-custom-cursor .cursor__ball{display:block}
-.cursor__ball{will-change:transform}
-.cursor__ball--big{
-  width:30px;height:34px;
-  border:1px solid #f7f8fa;background:transparent;
-}
-.cursor__ball--small{width:10px;height:18px;background:#f7f8fa;z-index:101}
-.cursor__ball--label-active{mix-blend-mode:normal;background:var(--cursor-hover-color);opacity:.9;border-color:transparent}
+.cursor__ball{mix-blend-mode:difference;will-change:transform}
+.cursor__ball.is-visible{visibility:visible;opacity:1}
+.cursor__ball--big{width:30px;height:34px}
+.cursor__ball--small{width:10px;height:18px}
+.cursor__ball>svg{transform-origin:50% 50%;transition:transform .3s cubic-bezier(.25,.46,.45,.94)}
+.cursor__ball--small>svg{transition-duration:.2s;transition-timing-function:cubic-bezier(.215,.61,.355,1)}
+.cursor__ball .cursor__shape{fill:#f7f8fa}
+.cursor__ball.is-hovered>svg{transform:scale(4)}
+.cursor__ball--small.is-hidden>svg{transform:scale(0)}
+.cursor__ball--label-active{mix-blend-mode:normal}
+.cursor__ball--label-active .cursor__shape{fill:var(--cursor-hover-color);opacity:.9}
 .cursor__label-wrap{
-  width:120px;height:110px;display:none;align-items:center;justify-content:center;
-  z-index:101;mix-blend-mode:normal;opacity:0;
+  width:120px;height:110px;display:flex;align-items:center;justify-content:center;
+  z-index:101;mix-blend-mode:normal;transition:opacity .2s,visibility .2s;
 }
-html.has-custom-cursor .cursor__label-wrap{display:flex}
-.cursor__label-wrap.is-visible{opacity:1}
+.cursor__label-wrap.is-visible{opacity:1;visibility:visible}
+.cursor__label-inner{display:flex;align-items:center;justify-content:center;gap:6px;width:100%}
+.cursor__label-chevron{display:none;color:#000;flex-shrink:0;line-height:0}
+.cursor__label-wrap--drag .cursor__label-chevron{display:block}
 .cursor__label{
-  color:#000;font-family:var(--font-mono);font-weight:700;font-size:13px;line-height:1;
+  color:#000;font-family:sans-serif;font-weight:700;font-size:13px;line-height:1;
   text-align:center;white-space:pre-line;
 }
-@media (hover:none),(pointer:coarse){
+@media (hover:hover) and (pointer:fine) and (prefers-reduced-motion:no-preference){
+  html.has-custom-cursor,html.has-custom-cursor *{cursor:none !important}
+}
+@media (hover:none),(pointer:coarse),(prefers-reduced-motion:reduce){
   .cursor__ball,.cursor__label-wrap{display:none !important}
 }
 
