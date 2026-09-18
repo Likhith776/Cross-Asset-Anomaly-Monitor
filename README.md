@@ -222,59 +222,6 @@ endpoint. Each panel resolves to an explicit **ready / empty / error** state, an
 a stale-data warning appears if the freshest snapshot is older than 15 minutes.
 It reloads itself every 5 minutes, matching the publisher cadence.
 
-### Motion
-
-The dashboard carries an additive motion layer inspired by the reference site's
-interactions and re-implemented in vanilla CSS/JS:
-
-- section entrance stagger, and a per-character **decode** on section headings;
-- the reference's **hover decrypt** on every link, button and tab: the label is
-  replaced by random uppercase glyphs and resolves back in ~400 ms (glyph set
-  `A-Z`, 400 ms, each character locking at a random 40-320 ms, punctuation never
-  touched, original text restored verbatim). It fires on hover for pointer users and
-  on keyboard focus (`:focus-visible`) for everyone else, and it is one shared
-  utility - `window.CPScramble` - rather than per-element code;
-- the hero paragraph **paints** word-by-word from `#333333` to white as you
-  scroll, at the reference's own timings (0.4s per character, 0.02s stagger,
-  linear, 0.6 scrub lag);
-- charts **develop** into view with a clip-path wipe and a surface scale, and the
-  plot then draws itself over 900ms;
-- asset cards stagger in and their prices count up — always landing on the exact
-  published value;
-- a live pulse when a new snapshot lands, a 1px scroll-progress rail, and
-  pointer-only hover depth.
-
-Every effect is mapped to a specific element with a stated rationale, and one
-(the reference's artwork parallax) was deliberately dropped because the dashboard
-has no artwork to parallax.
-
-| Document | What it covers |
-|---|---|
-| [`MOTION-SPEC.md`](docs/design/MOTION-SPEC.md) | Every effect: target, timings, easing, trigger, rationale, kill switch |
-| [`CODAPRESS-HOVER-DECRYPT-EXPLORATION.md`](docs/design/CODAPRESS-HOVER-DECRYPT-EXPLORATION.md) | How the reference's hover decrypt works, read from its own module and confirmed live |
-| [`MOTION-HANDOFF.md`](docs/design/MOTION-HANDOFF.md) | Where the code lives, how to disable or tune it, the invariants it keeps |
-| [`CODAPRESS-MOTION-INVENTORY.md`](docs/design/CODAPRESS-MOTION-INVENTORY.md) | The reference site's motion, quoted from its own bundled modules |
-
-Disable the whole layer with `?motion=off`, `data-motion="off"` on `<html>`,
-or by deleting the two asset tags. `prefers-reduced-motion: reduce` disables it
-automatically. The layer is two files totalling 22.6 KB — 3.7% of the page.
-
-### Design system
-
-The visual language is a measured reproduction of
-[**codapress.co.uk**](https://codapress.co.uk/) — one monospace family
-(JetBrains Mono 400/700), a black canvas, a fluid `clamp(min, x·lvw, max)` scale,
-spacing and height tokens keyed to a stable 900px viewport, sharp corners with
-hairline borders and no shadows, a single accent reserved for the cursor, and a
-digitally-dithered hero.
-
-| Document | What it covers |
-|---|---|
-| [`docs/design/CODAPRESS-DESIGN-SPEC.md`](docs/design/CODAPRESS-DESIGN-SPEC.md) | Every measured token, component rule and behaviour |
-| [`docs/design/CODAPRESS-DESIGN-PARITY.md`](docs/design/CODAPRESS-DESIGN-PARITY.md) | Side-by-side parity checklist, responsive/accessibility/state evidence, deliberate deviations |
-
-No reference copy, imagery, logo or source code is reused.
-
 ## Local setup
 
 ### Slim profile (no Docker)
@@ -428,11 +375,6 @@ Until that file exists, treat the code as source-available, not open source.
 
 - Detection, pipeline, API and dashboard: built by **Likhith**
   ([@Likhith776](https://github.com/Likhith776)).
-- Visual language: measured from [codapress.co.uk](https://codapress.co.uk/) —
-  structure, tokens and behaviour only; no copy, imagery or code reused. The
-  parity evidence is documented in [`docs/design/`](docs/design/CODAPRESS-DESIGN-PARITY.md).
-- Typeface: [JetBrains Mono](https://www.jetbrains.com/lp/mono/) (SIL Open Font
-  License).
 - Charts: [Apache ECharts](https://echarts.apache.org/) 5.5 via jsDelivr.
 - Detector evaluation methodology: replay harness with planted events
   (`src/backtest/`), in the spirit of the standard precision/recall-first
